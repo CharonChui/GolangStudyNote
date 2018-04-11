@@ -35,7 +35,7 @@ Golang学习笔记
 [6]: https://github.com/CharonChui/GolangStudyNote/blob/master/Golang%E6%8C%87%E9%92%88%E3%80%81%E7%BB%93%E6%9E%84%E4%BD%93%E5%8F%8A%E6%8E%A5%E5%8F%A3(%E5%85%AD).md   "Golang指针、结构体及接口(六)"
 [7]: https://github.com/CharonChui/GolangStudyNote/blob/master/Golang%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86(%E4%B8%83).md   "Golang错误处理(七)"
 [8]: https://github.com/CharonChui/GolangStudyNote/blob/master/Golang%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E4%B9%8BGoroutine%E5%8F%8AChannel(%E5%85%AB).md   "Golang并发编程之Goroutine及Channel(八)"
-[9]: https://github.com/CharonChui/AndroidNote/blob/master/SourceAnalysis/VideoView%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90.md   "Golang常用功能简介(九)"
+[9]: https://github.com/CharonChui/GolangStudyNote/blob/master/Golang%E5%B8%B8%E7%94%A8%E5%8A%9F%E8%83%BD%E7%AE%80%E4%BB%8B(%E4%B9%9D).md   "Golang常用功能简介(九)"
 [10]: https://github.com/CharonChui/GolangStudyNote/blob/master/Golang%E6%96%B9%E6%B3%95(%E5%8D%81).md   "Golang方法(十)"
 [11]: https://github.com/CharonChui/GolangStudyNote/blob/master/Golang%E5%8F%8D%E5%B0%84(%E5%8D%81%E4%B8%80).md   "Golang反射(十一)"
 [12]: https://github.com/CharonChui/GolangStudyNote/blob/master/Golang%E5%BC%80%E5%8F%91%E4%B9%8BIDE%E9%80%89%E6%8B%A9(%E5%8D%81%E4%BA%8C).md   "Golang开发之IDE选择(十二)"
