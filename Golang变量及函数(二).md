@@ -344,6 +344,73 @@ func main() {
 - `complex、real imag`:用于创建和操作复数
 
 
+main函数和init函数
+---
+
+`Go`里面有两个保留的函数:
+
+- `init`函数（能够应用于所有的`package`中）
+- `main`函数（只能应用于`package main`中）
+
+这两个函数在定义时不能有任何的参数和返回值。虽然一个`package`里面可以写任意多个`init`函数，但这无论是对于可读性还是以后的可维护性来说，我们都强烈建议用户在一个`package`中每个文件只写一个`init`函数。
+
+`Go`程序会自动调用`init()`和`main()`，所以你不需要在任何地方调用这两个函数。每个`package`中的`init`函数都是可选的，但`package main`就必须包含一个`main`函数。
+
+程序的初始化和执行都起始于`main`包。如果`main`包还导入了其它的包，那么就会在编译时将它们依次导入。有时一个包会被多个包同时导入，那么它只会被导入一次（例如很多包可能都会用到`fmt`包，但它只会被导入一次，因为没有必要导入多次）。当一个包被导入时，如果该包还导入了其它的包，那么会先将其它包导入进来，然后再对这些包中的包级常量和变量进行初始化，接着执行`init`函数（如果有的话），依次类推。等所有被导入的包都加载完毕了，就会开始对`main`包中的包级常量和变量进行初始化，然后执行`main`包中的`init`函数（如果存在的话），最后执行`main`函数。
+
+下图详细地解释了整个执行过程:    
+
+![Image](https://raw.githubusercontent.com/CharonChui/Pictures/master/go_init_main.png?raw=true)
+
+
+import导入包
+---
+
+
+讲到这里顺便讲一下`import`导包。我们上面频繁用到了`improt "fmt"`。
+上面这个`fmt`是`Go`语言的标准库，其实是去`GOROOT`环境变量指定目录下去加载该模块，当然`Go`的`import`还支持如下两种方式来加载自己写的模块:   
+
+- 相对路径     
+    `import “./model”` //当前文件同一目录的`model`目录，但是不建议这种方式来`import`
+
+- 绝对路径     
+    `import “shorturl/model`” //加载`gopath/src/shorturl/model`模块
+
+上面展示了一些`import`常用的几种方式，但是还有一些特殊的`import`:     
+
+- 点操作     
+    ```go
+    import(
+     . "fmt"
+    )
+    ```
+    这个点操作的含义就是这个包导入之后在你调用这个包的函数时，你可以省略前缀的包名，也就是前面你调用的`fmt.Println("hello world")`可以省略的写成`Println("hello world")`
+
+- 别名操作     
+    别名操作顾名思义我们可以把包命名成另一个我们用起来容易记忆的名字
+    ```go
+    import(
+     f "fmt"
+    )
+    ```
+    别名操作的话调用包函数时前缀变成了我们的前缀，即`f.Println("hello world")`
+
+- `_`操作
+    这个操作经常是让很多人费解的一个操作符
+    ```go
+    import (
+        "database/sql"
+        _ "github.com/ziutek/mymysql/godrv"
+    )
+    ```
+    `_`操作其实是引入该包，而不直接使用包里面的函数，而是调用了该包里面的`init`函数。
+
+
+
+
+
+
+
   
 ---
 
