@@ -1,0 +1,690 @@
+Golang并发编程之Goroutine及Channel(八)
+===
+
+进程、线程、并行和并发
+---
+
+一个应用程序是运行在机器上的一个进程；进程是一个运行在自己内存地址空间里的独立执行体。一个进程由一个或多个操作系统线程组成，这些线程其实是共享同一个内存地址空间的一起工作的执行体。几乎所有’正式’的程序都是多线程的，以便让用户或计算机不必等待，或者能够同时服务多个请求（如`Web`服务器），或增加性能和吞吐量（例如，通过对不同的数据集并行执行代码）。
+
+一个并发程序可以在一个处理器或者内核上使用多个线程来执行任务，但是只有在同一个程序在某一个时间点在多个些处理内核或处理器上同时执行的任务才是真正的并行。
+
+并行是一种通过使用多处理器以提高速度的能力。所以并发程序可以是并行的，也可以不是。
+
+公认的使用多线程的应用最主要的问题是内存中的数据共享，它们会被多线程以无法预知的方式进行操作，导致一些无法重现或者随机的结果（称作竞态）。
+
+在`Go`中，应用程序并发处理的部分被称作`goroutines`（`go`协程），它可以进行更有效的并发运算。在协程和操作系统线程之间并无一对一的关系:协程是根据一个或多个线程的可用性，映射（多路复用，执行于）在它们之上的；协程调度器在`Go`运行时很好的完成了这个工作。
+
+
+
+`Goroutine`简介
+---
+
+`Goroutine`是一个轻量级的执行线程。这类似我们熟知的线程，但是更加轻量级，可以理解成`java`中的`thread`。
+
+假设有一个函数调用`f(s)`。 下面是以通常的方式调用它，同步运行它。
+要在`goroutine`中调用此函数，请使用`go f(s)`。 这个新的`goroutine`将与调用同时执行。
+
+也可以为匿名函数调用启动一个`goroutine`。
+
+在将`goroutine`之前，我们先看一个串行的例子:    
+```go
+package main
+
+import "fmt"
+
+func loop() {
+    for i := 0; i < 10; i++ {
+        fmt.Printf("%d ", i)
+    }
+}
+
+
+func main() {
+    loop()
+    loop()
+}
+```
+这是最常用的串行方式，也就是先执行第一次`loop()`方法，然后执行完成后再去执行第二次`loop()`方法。
+执行结果:   
+```
+0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 
+```
+
+但是如果我们把上面`main()`函数中的第一个`loop()`放到`goroutine`中呢?   
+```go
+func main() {
+    go loop()
+    loop()
+}
+```
+
+执行结果:   
+```
+0 1 2 3 4 5 6 7 8 9 
+```
+
+到这里就看不明白了，为什么只输出了一次`0~9`，我调用了两次`loop()`，虽然一次在主线程中，一次在`goroutine`中，按道理要输出两边`0~9`，当然这两边的顺序会不一致。
+但是我心中的输出结果大体应该是这个样子的`010123456273456789789`。为什么这里只有一次？ 
+原来，在`goroutine`还没来得及跑`loop`的时候，主函数已经退出了。
+
+那如何让`goroutine`执行完毕后告诉主线程我执行完毕了然后再退出呢？ 使用一个信道来告诉主线程即可。
+
+无缓冲的信道在取消息和存消息的时候都会挂起当前的`goroutine`，除非另一端已经准备好。如果不用信道来阻塞主线的话，主线程就会过早跑完，`loop`线程都没有机会执行。
+
+无缓冲的信道永远不会存储数据，只负责数据的流通。体现在:   
+
+- 从无缓冲信道取数据，必须要有数据流进来才可以，否则当前线阻塞
+- 数据流入无缓冲信道, 如果没有其他`goroutine`来拿走这个数据，那么当前线阻塞
+
+这里先只贴上代码，具体到`channel`的部分再讲:    
+```go
+var complete chan int = make(chan int)
+
+func loop() {
+    for i := 0; i < 10; i++ {
+        fmt.Printf("%d ", i)
+    }
+
+    complete <- 0 // 执行完毕了，发个消息
+}
+
+
+func main() {
+    go loop()
+    <- complete // 直到线程跑完, 取到消息. main在此阻塞住
+}
+```
+
+
+当我们运行这个程序时，首先看到阻塞调用的输出，然后是两个`gouroutines`的交替输出。 这种交替反映了`Go`运行时并发运行的`goroutine`。
+
+```go
+package main
+
+import "fmt"
+
+func f(from string) {
+	for i := 0; i < 3; i++ {
+		fmt.Println(from, ":", i)
+	}
+}
+
+func main() {
+
+	// Suppose we have a function call `f(s)`. Here's how
+	// we'd call that in the usual way, running it
+	// synchronously.
+	f("direct")
+
+	// To invoke this function in a goroutine, use
+	// `go f(s)`. This new goroutine will execute
+	// concurrently with the calling one.
+	go f("goroutine")
+
+	// You can also start a goroutine for an anonymous
+	// function call.
+	go func(msg string) {
+		fmt.Println(msg)
+	}("going")
+
+	// Our two function calls are running asynchronously in
+	// separate goroutines now, so execution falls through
+	// to here. This `Scanln` code requires we press a key
+	// before the program exits.
+	var input string
+	fmt.Scanln(&input)
+	fmt.Println("done")
+}
+```
+
+执行结果是:  
+```
+direct : 0
+direct : 1
+direct : 2
+goroutine : 0
+goroutine : 1
+goroutine : 2
+going
+1123 // 我们键盘输入的
+done
+```
+
+
+`Go`语言并发模型
+`Go`语言中使用了`CSP`模型来进行线程通信，准确说，是轻量级线程`goroutine`之间的通信。`CSP`模型和`Actor`模型类似，也是由独立的，并发执行的实体所构成，实体之间也是通过发送消息进行通信的。
+
+`Actor`模型和`CSP`模型区别:    
+`Actor`之间直接通讯，而`CSP`是通过`Channel`通讯，在耦合度上两者是有区别的，后者更加松耦合。
+
+主要的区别在于:`CSP`模型中消息的发送者和接收者之间通过`Channel`松耦合，发送者不知道自己消息被哪个接收者消费了，接收者也不知道是哪个发送者发送的消息。
+在`Actor`模型中，由于`Actor`可以根据自己的状态选择处理哪个传入消息，自主性可控性更好些。
+
+在`Go`语言中为了不堵塞进程，程序员必须检查不同的传入消息，以便预见确保正确的顺序。`CSP`好处是`Channel`不需要缓冲消息，而`Actor`理论上需要一个无限大小的邮箱作为消息缓冲。
+
+`CSP`模型的消息发送方只能在接收方准备好接收消息时才能发送消息。相反，`Actor`模型中的消息传递是异步 的，即消息的发送和接收无需在同一时间进行，发送方可以在接收方准备好接收消息前将消息发送出去
+
+
+通道(channel)
+---
+
+`Go`语言中`Channel`类型的定义格式如下:  
+```go
+ChannelType = ( "chan" | "chan" "<-" | "<-" "chan" ) ElementType .
+```
+
+它包括三种类型的定义。可选的`<-`代表`channel`的方向。如果没有指定方向，那么`Channel`就是双向的，既可以接收数据，也可以发送数据。
+```go
+chan T          // 可以接收和发送类型为 T 的数据
+chan <- float64  // 只可以用来发送 float64 类型的数据
+<-chan int      // 只可以用来接收 int 类型的数据
+```
+
+默认情况下，`channel`发送方和接收方会一直阻塞直到对方准备好发送或者接收，这就使得`Go`语言无需加锁或者其他条件，天然支持了并发。
+
+```go
+c := make(chan bool) //创建一个无缓冲的bool型Channel
+c <- x        //向一个Channel发送一个值
+<- c          //从一个Channel中接收一个值
+x = <- c      //从Channel c接收一个值并将其存储到x中
+x, ok = <- c  //从Channel接收一个值，如果channel关闭了或没有数据，那么ok将被置为false
+```
+
+通道是连接并发`goroutine`的管道。可以从一个`goroutine`向通道发送值，并在另一个`goroutine`中接收到这些值。
+使用`make(chan val-type)`创建一个新通道，通道由输入的值传入。使用通道`<-`语法将值发送到通道。
+这里从一个新的`goroutine`发送`ping`到在上面的消息通道。
+
+`<-channel`语法从通道接收值。在这里，将收到上面发送的`ping`消息并打印出来。当运行程序时，`ping`消息通过通道成功地从一个
+`goroutine`传递到另一个`goroutine`。实现了线程间（准确的说`goroutine`之间的）通信。此属性允许在程序结束时等待`ping`消息，而不必使用任何其他同步。
+```go
+package main
+
+import "fmt"
+
+func main() {
+
+    // Create a new channel with `make(chan val-type)`.
+    // Channels are typed by the values they convey.
+    messages := make(chan string)
+
+    // _Send_ a value into a channel using the `channel <-`
+    // syntax. Here we send `"ping"`  to the `messages`
+    // channel we made above, from a new goroutine.
+    go func() { messages <- "ping" }()
+
+    // The `<-channel` syntax _receives_ a value from the
+    // channel. Here we'll receive the `"ping"` message
+    // we sent above and print it out.
+    msg := <-messages
+    fmt.Println(msg) // 输出ping
+}
+```
+
+默认情况下，通道是未缓冲的，意味着如果有相应的接收`(<- chan)`准备好接收发送的值，它们将只接受发送`(chan <- )`。 缓冲通道接受有限数量的值，而没有用于这些值的相应接收器。
+
+这里使一个字符串的通道缓冲多达2个值。因为这个通道被缓冲，所以可以将这些值发送到通道中，而没有相应的并发接收。
+
+之后可以照常接收这两个值。
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+
+    // Here we `make` a channel of strings buffering up to
+    // 2 values.
+    messages := make(chan string, 2)
+
+    // Because this channel is buffered, we can send these
+    // values into the channel without a corresponding
+    // concurrent receive.
+    messages <- "buffered"
+    messages <- "channel"
+
+    // Later we can receive these two values as usual.
+    fmt.Println(<-messages) // buffered
+    fmt.Println(<-messages) // channel
+}
+```
+
+我们可以使用通道在`goroutine`上同步执行程序。这里有一个使用阻塞接收等待`goroutine`完成的示例。
+
+这是将在`goroutine`中运行的函数。`done`通道将用来通知另一个`goroutine`这个函数的工作已经完成，发送值以通知已经完成。
+
+启动一个`goroutine`工作程序，给它一个通知通道。如果从此程序中删除`<-done`行，程序将在工作程序`(worker)`启动之前退出。
+
+阻止，直到在通道上收到工作程序的通知。
+```go
+package main
+
+import "fmt"
+import "time"
+
+// This is the function we'll run in a goroutine. The
+// `done` channel will be used to notify another
+// goroutine that this function's work is done.
+func worker(done chan bool) {
+    fmt.Print("working...")
+    time.Sleep(time.Second)
+    fmt.Println("done")
+
+    // Send a value to notify that we're done.
+    done <- true
+}
+
+func main() {
+
+    // Start a worker goroutine, giving it the channel to
+    // notify on.
+    done := make(chan bool, 1)
+    go worker(done)
+
+    // Block until we receive a notification from the
+    // worker on the channel.
+    <-done
+}
+```
+
+使用`make`初始化`Channel`,还可以设置容量:   
+```go
+make(chan int, 100) #//创建一个有缓冲的int型Channel
+```
+
+
+`Channel`缓冲介绍
+---
+
+容量`(capacity)`代表`Channel`容纳的最多的元素的数量，代表`Channel`的缓冲的大小。如果没有设置容量，或者容量设置为0,
+说明`Channel`没有缓冲。
+
+在实际开发中，你可以在多个`goroutine`从/往一个`channel`中`receive/send`数据, 不必考虑额外的同步措施。
+`Channel`可以作为一个先入先出`(FIFO)`的队列，接收的数据和发送的数据的顺序是一致的。
+不带缓冲的`Channel`兼具通信和同步两种特性，在并发开发中颇受青睐。
+
+
+`Select`
+---
+
+`Go`语言的选择`(select)`可等待多个通道操作。将`goroutine`和`channel`与`select`结合是`Go`语言的一个强大功能。
+
+对于这个示例，将选择两个通道。
+每个通道将在一段时间后开始接收值，以模拟阻塞在并发`goroutines`中执行的`RPC`操作。我们将使用`select`同时等待这两个值，
+在每个值到达时打印它们。
+
+执行实例程序得到的值是`one`，然后是`two`。注意，总执行时间只有`1〜2`秒，因为`1-2`秒`Sleeps`同时执行。
+
+```go
+package main
+
+import "time"
+import "fmt"
+
+func main() {
+
+    // For our example we'll select across two channels.
+    c1 := make(chan string)
+    c2 := make(chan string)
+
+    // Each channel will receive a value after some amount
+    // of time, to simulate e.g. blocking RPC operations
+    // executing in concurrent goroutines.
+    go func() {
+        time.Sleep(time.Second * 1)
+        c1 <- "one"
+    }()
+    go func() {
+        time.Sleep(time.Second * 2)
+        c2 <- "two"
+    }()
+
+    // We'll use `select` to await both of these values
+    // simultaneously, printing each one as it arrives.
+    for i := 0; i < 2; i++ {
+        select {
+        case msg1 := <-c1:
+            fmt.Println("received", msg1)
+        case msg2 := <-c2:
+            fmt.Println("received", msg2)
+        }
+    }
+}
+```
+
+执行结果:   
+```
+received  one // 1s后输出
+received  two // 2s后输出
+```
+
+超时(timeout)
+---
+
+超时对于连接到外部资源或在不需要绑定执行时间的程序很重要。在`Go`编程中由于使用了通道和选择`(select)`,实现超时是容易和优雅的。
+在这个示例中，假设正在执行一个外部调用，`2`秒后在通道`c1`上返回其结果。
+
+这里是`select`实现超时。`res：= <-c1`等待结果和`<-Time`。等待在超时1秒后发送一个值。由于选择继续准备好第一个接收，
+如果操作超过允许的`1`秒，则将按超时情况处理。
+
+如果允许更长的超时，如`3s`，那么从`c2`的接收将成功，这里将会打印结果。
+
+运行此程序显示第一个操作超时和第二个操作超时。
+
+使用此选择超时模式需要通过通道传达结果。这是一个好主意，因为其他重要的`Go`功能是基于渠道和`Select`。
+现在看看下面的两个例子：计时器和`ticker`。
+
+```go
+package main
+
+import "time"
+import "fmt"
+
+func main() {
+
+    // For our example, suppose we're executing an external
+    // call that returns its result on a channel `c1`
+    // after 2s.
+    c1 := make(chan string, 1)
+    go func() {
+        time.Sleep(time.Second * 2)
+        c1 <- "result 1"
+    }()
+
+    // Here's the `select` implementing a timeout.
+    // `res := <-c1` awaits the result and `<-Time.After`
+    // awaits a value to be sent after the timeout of
+    // 1s. Since `select` proceeds with the first
+    // receive that's ready, we'll take the timeout case
+    // if the operation takes more than the allowed 1s.
+    select {
+    case res := <-c1:
+        fmt.Println(res)
+    case <-time.After(time.Second * 1):
+        fmt.Println("timeout 1")
+    }
+
+    // If we allow a longer timeout of 3s, then the receive
+    // from `c2` will succeed and we'll print the result.
+    c2 := make(chan string, 1)
+    go func() {
+        time.Sleep(time.Second * 2)
+        c2 <- "result 2"
+    }()
+    select {
+    case res := <-c2:
+        fmt.Println(res)
+    case <-time.After(time.Second * 3):
+        fmt.Println("timeout 2")
+    }
+}
+```
+执行结果:   
+```
+timeout 1
+result 2
+```
+
+
+通道的基本发送和接收都阻塞。但是，可以使用`select`和`default`子句来实现非阻塞发送，接收，甚至非阻塞多路选择`(select)`。
+
+这里是一个非阻塞接收。如果消息上有可用的值，则选择将使用该值的`<-message`大小写。如果不是，它会立即采用默认情况。
+非阻塞发送工作类似。
+
+可以使用多个上面的默认子句来实现多路非阻塞选择`(select)`。这里尝试对消息`(message)`和信号`(signals)`的非阻塞接收。
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+    messages := make(chan string)
+    signals := make(chan bool)
+
+    // Here's a non-blocking receive. If a value is
+    // available on `messages` then `select` will take
+    // the `<-messages` `case` with that value. If not
+    // it will immediately take the `default` case.
+    select {
+    case msg := <-messages:
+        fmt.Println("received message", msg)
+    default:
+        fmt.Println("no message received")
+    }
+
+    // A non-blocking send works similarly.
+    msg := "hi"
+    select {
+    case messages <- msg:
+        fmt.Println("sent message", msg)
+    default:
+        fmt.Println("no message sent")
+    }
+
+    // We can use multiple `case`s above the `default`
+    // clause to implement a multi-way non-blocking
+    // select. Here we attempt non-blocking receives
+    // on both `messages` and `signals`.
+    select {
+    case msg := <-messages:
+        fmt.Println("received message", msg)
+    case sig := <-signals:
+        fmt.Println("received signal", sig)
+    default:
+        fmt.Println("no activity")
+    }
+}
+```
+执行结果:   
+```
+no message received
+no message sent
+no activity
+```
+
+
+关闭通道表示不会再发送更多值。这对于将完成通信到通道的接收器是很有用的。
+
+在这个例子中，我们将使用一个作业通道来完成从`main() goroutine`到`worker goroutine`的工作。当没有更多的工作时，则将关闭工作通道。
+
+这里是工作程序`goroutine`。它反复从j的工作接收`more := <-jobs`。在这种特殊的2值形式的接收中，如果作业已关闭并且已经接收到通道中的所有值，
+则`more`的值将为`false`。当已经完成了所有的工作时，使用这个通知。
+
+这会通过作业通道向工作线程发送3个作业，然后关闭它。
+
+```go
+package main
+
+import "fmt"
+
+// In this example we'll use a `jobs` channel to
+// communicate work to be done from the `main()` goroutine
+// to a worker goroutine. When we have no more jobs for
+// the worker we'll `close` the `jobs` channel.
+func main() {
+    jobs := make(chan int, 5)
+    done := make(chan bool)
+
+    // Here's the worker goroutine. It repeatedly receives
+    // from `jobs` with `j, more := <-jobs`. In this
+    // special 2-value form of receive, the `more` value
+    // will be `false` if `jobs` has been `close`d and all
+    // values in the channel have already been received.
+    // We use this to notify on `done` when we've worked
+    // all our jobs.
+    go func() {
+        for {
+            j, more := <-jobs
+            if more {
+                fmt.Println("received job", j)
+            } else {
+                fmt.Println("received all jobs")
+                done <- true
+                return
+            }
+        }
+    }()
+
+    // This sends 3 jobs to the worker over the `jobs`
+    // channel, then closes it.
+    for j := 1; j <= 3; j++ {
+        jobs <- j
+        fmt.Println("sent job", j)
+    }
+    close(jobs)
+    fmt.Println("sent all jobs")
+
+    // We await the worker using the
+    // [synchronization](channel-synchronization) approach
+    // we saw earlier.
+    <-done
+}
+```
+执行结果:   
+```
+sent job 1
+sent job 2
+sent job 3
+sent all jobs
+received job 1
+received job 2
+received job 3
+received all jobs
+```
+
+
+在前面的例子中，我们已经看到了`for`和`range`语句如何为基本数据结构提供迭代。还可以使用此语法对从通道接收的值进行迭代。
+
+此范围在从队列接收到的每个元素上进行迭代。因为关闭了上面的通道，迭代在接收到2个元素后终止。
+
+这个示例还示出可以关闭非空信道，但仍然接收剩余值。
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+
+    // We'll iterate over 2 values in the `queue` channel.
+    queue := make(chan string, 2)
+    queue <- "one"
+    queue <- "two"
+    close(queue)
+
+    // This `range` iterates over each element as it's
+    // received from `queue`. Because we `close`d the
+    // channel above, the iteration terminates after
+    // receiving the 2 elements.
+    for elem := range queue {
+        fmt.Println(elem)
+    }
+}
+```
+
+执行结果:    
+```
+one
+two
+```
+
+
+定时器代表未来的一个事件。可告诉定时器您想要等待多长时间，它提供了一个通道，在当将通知时执行对应程序。在这个示例中，计时器将等待2秒钟。
+
+`<-timer1.C`阻塞定时器的通道`C`，直到它发送一个指示定时器超时的值。
+
+如果只是想等待，可以使用`time.Sleep`。定时器可能起作用的一个原因是在定时器到期之前取消定时器。这里有一个例子。
+
+第一个定时器将在启动程序后约2s过期，但第二个定时器应该在它到期之前停止。
+```go
+package main
+
+import "time"
+import "fmt"
+
+func main() {
+
+    // Timers represent a single event in the future. You
+    // tell the timer how long you want to wait, and it
+    // provides a channel that will be notified at that
+    // time. This timer will wait 2 seconds.
+    timer1 := time.NewTimer(time.Second * 2)
+
+    // The `<-timer1.C` blocks on the timer's channel `C`
+    // until it sends a value indicating that the timer
+    // expired.
+    <-timer1.C
+    fmt.Println("Timer 1 expired")
+
+    // If you just wanted to wait, you could have used
+    // `time.Sleep`. One reason a timer may be useful is
+    // that you can cancel the timer before it expires.
+    // Here's an example of that.
+    timer2 := time.NewTimer(time.Second)
+    go func() {
+        <-timer2.C
+        fmt.Println("Timer 2 expired")
+    }()
+    stop2 := timer2.Stop()
+    if stop2 {
+        fmt.Println("Timer 2 stopped")
+    }
+}
+```
+
+执行结果为:    
+```go
+Timer 1 expired
+Timer 2 stopped
+```
+
+计时器是当想在未来做一些事情，`tickers`是用于定期做一些事情。 这里是一个例行程序，周期性执行直到停止。
+
+代码机使用与计时器的机制类似:发送值到通道。 这里我们将使用通道上的一个范围内来迭代值，这此值每`500ms`到达。
+
+代码可以像计时器一样停止。当代码停止后，它不会在其通道上接收任何更多的值。我们将在`1600ms`后停止。
+
+当运行这个程序时，`ticker`应该在我们停止之前打3次。
+```go
+package main
+
+import "time"
+import "fmt"
+
+func main() {
+
+    // Tickers use a similar mechanism to timers: a
+    // channel that is sent values. Here we'll use the
+    // `range` builtin on the channel to iterate over
+    // the values as they arrive every 500ms.
+    ticker := time.NewTicker(time.Millisecond * 500)
+    go func() {
+        for t := range ticker.C {
+            fmt.Println("Tick at", t)
+        }
+    }()
+
+    // Tickers can be stopped like timers. Once a ticker
+    // is stopped it won't receive any more values on its
+    // channel. We'll stop ours after 1600ms.
+    time.Sleep(time.Millisecond * 1600)
+    ticker.Stop()
+    fmt.Println("Ticker stopped")
+}
+```
+
+执行结果:    
+
+```
+Tick at 2018-04-10 14:18:44.909170271 +0800 CST m=+0.500687046
+Tick at 2018-04-10 14:18:45.409704505 +0800 CST m=+1.001220264
+Tick at 2018-04-10 14:18:45.909330121 +0800 CST m=+1.500844866
+Ticker stopped
+```
+
+
+---
+
+- 邮箱 ：charon.chui@gmail.com  
+- Good Luck! 

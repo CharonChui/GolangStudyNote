@@ -1,0 +1,154 @@
+Golang反射(十一)
+===
+
+空接口
+---
+
+`Go`语言空`interface(interface{})`不包含任何的`method`，因此所有的类型都实现了空`interface`，空`interface`在我们需要存储任意类型的数值的时候相当有用。我们通过一个例子来看一下空接口的强大:    
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	slice := make([]interface{}, 10)
+	map1 := make(map[string]string)
+	map2 := make(map[string]int)
+	map2["TaskID"] = 1
+	map1["Command"] = "ping"
+	map3 := make(map[string]map[string]string)
+	map3["mapvalue"] = map1
+	slice[0] = map2
+	slice[1] = map1
+	slice[3] = map3
+	fmt.Println(slice[0])
+	fmt.Println(slice[1])
+	fmt.Println(slice[3])
+}
+```
+这段代码声明了一个空接口的`slice`，这意味着它的值可以是任意类型，然后我们声明了两个`map`，一个是`map[string]string`，一个是`map[string]int`，
+然后在声明一个`map`的`map`类型，将这三个类型赋值给`slice`，使得`slice`可以存贮各种不同类型的数据，想想看，一个可变数组中，存储了一个`key`为`string`类型，`value`为`int`类型的`map`，又存储了一个`key`为`string`类型，`value`为`string`类型的`map`，还存储了一个`map`的`map`。
+
+`go`的反射机制是要通过接口来进行的，而类似于`Java`的`Object`的空接口可以和任何类型进行交互，因此对基本数据类型等的反射也直接利用了这一特点。
+
+接口类型变量转换为反射类型对象
+---
+
+```go
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+func main() {
+	var circle = 6.28
+	var icir interface{}
+
+	icir = circle
+	fmt.Println("Reflect : circle.Value = ", reflect.ValueOf(icir))
+	fmt.Println("Reflect : circle.Type  = ", reflect.TypeOf(icir))
+}
+```
+执行结果是:   
+```
+Reflect : circle.Value =  6.28
+Reflect : circle.Type  =  float64
+```
+
+可以看到`ValueOf`和`TypeOf`的参数都是空接口，因此，这说明可以直接使用变量传进去，比如:     
+```go
+func main() {
+	var circle = 6.28
+	// 下面这样和上面传入空接口是一样的
+	fmt.Println("Reflect : circle.Value = ", reflect.ValueOf(circle))
+	fmt.Println("Reflect : circle.Type  = ", reflect.TypeOf(circle))
+}
+```
+
+反射类型对象转换为接口类型变量
+---
+
+这个其实是上面运算的逆过程:   
+```go
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+func main() {
+	var circle = 6.28
+	var icir interface{}
+	icir = circle
+
+	valueref := reflect.ValueOf(icir)
+	fmt.Println(valueref)
+	fmt.Println(valueref.Interface())
+
+	y := valueref.Interface().(float64)
+	fmt.Println(y)
+}
+```
+
+
+用反射进行变量修改
+---
+
+利用反射修改变量时，首先需要使用`CanSet`函数确认变量是否是可修改的。简单代码示例如下:   
+```go
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+func main() {
+	var circle = 6.28
+
+	value := reflect.ValueOf(circle)
+	fmt.Println("Reflect : value = ", value)
+	fmt.Println("Settability of value : ", value.CanSet())
+
+	value2 := reflect.ValueOf(&circle)
+	fmt.Println("Settability of value : ", value2.CanSet())
+
+	value3 := value2.Elem()
+	fmt.Println("Settability of value : ", value3.CanSet())
+
+	value3.SetFloat(3.14)
+	fmt.Println("Value of value3: ", value3)
+	fmt.Println("value of circle: ", circle)
+}
+```
+
+
+执行结果如下:   
+```
+Reflect : value =  6.28
+Settability of value :  false
+Settability of value :  false
+Settability of value :  true
+Value of value3:  3.14
+value of circle:  3.14
+```
+
+
+
+性能代价
+---
+
+`Go`语言反射在带来“方便”的同时，会造成问题:它会带来很大的性能损失。直接赋值和反射赋值在实际使用中性能差异挺大，所以如果对性能要求较高，那么请谨慎使用反射。
+
+
+
+
+---
+
+- 邮箱 ：charon.chui@gmail.com  
+- Good Luck! 

@@ -1,0 +1,535 @@
+Golang字符串(五)
+===
+
+
+`Go`语言中的字符串也可能根据需要占用`1`至`4`个字节，这与其它语言如`C++`、`Java`或者`Python`不同（`Java`始终使用`2`个字节）。`Go`这样做的好处是不仅减少了内存和硬盘空间占用，同时也不用像其它语言那样需要对使用`UTF-8`字符集的文本进行编码和解码。
+
+
+`Go`语言支持以下2种形式的字符串:   
+
+- 解释性字符串      
+    带引号的字节序列。该类字符串使用双引号括起来，其中的相关的转义字符将被替换。例如:`str := "xxx"`
+- 原生字符串      
+    该类字符串使用反引号括起来，支持换行。例如:`This is a raw string \n`
+
+
+字符串函数包
+---
+
+`strings`包提供了很多操作字符串的简单函数，通常一般的字符串操作需求都可以在这个包中找到。
+
+- 判断是否以某字符串打头/结尾
+```go
+strings.HasPrefix(s, prefix string) bool 
+strings.HasSuffix(s string, suffix string) bool
+```
+- 字符串分割
+```go
+strings.Split(s string, sep string) []string
+```
+- 返回子串索引
+```go
+strings.Index(s string, sub string) int 
+strings.LastIndex 最后一个匹配索引
+```
+- 字符串连接
+```go
+strings.Join(a []string, sep string) string 
+另外可以直接使用“+”来连接两个字符串
+```
+- 字符串替换
+```go
+strings.Replace(s, old, new string, n int) string
+```
+- 字符串转化为大小写
+```go
+strings.ToUpper(s string) string 
+strings.ToLower(s string) string
+```
+- 统计某个字符在字符串出现的次数
+```go
+strings.Count(s string, sep string) int
+```
+- 判断字符串的包含关系
+```go
+strings.Contains(s, substr string) bool
+```
+
+strconv
+---
+
+`strconv`包提供了基本数据类型和字符串之间的转换。在`Go`中，没有隐式类型转换，一般的类型转换可以这么做:`int32(i)`，将`i`（比如为`int`类型）转换为`int32`，然而字符串类型和`int`、`float`、`bool`等类型之间的转换却没有这么简单。与字符串相关的类型转换都是通过`strconv`包实现的。
+
+针对从数字类型转换到字符串，`Go` 提供了以下函数:  
+
+- `strconv.Itoa(i int) string`
+
+
+```go
+import(
+  "fmt"
+  "strings"
+  "strconv"
+)
+
+func main() {
+  str01 :=`This is a raw string \n`  //原生字符串
+  str02 :="This is a raw string \n"//引用字符串
+  fmt.Println("原生字符串和引用字符串的区别")
+  fmt.Printf(str01)
+  fmt.Println("")
+  fmt.Printf(str02)
+  fmt.Println("")
+  fmt.Println("+连接字符串")
+  var str03 string = str01 +str02
+  fmt.Printf(str03)
+  fmt.Println("")
+  var str string = "This is an example of a string"
+  fmt.Println("HasPrefix 函数的用法")
+  fmt.Printf("T/F? Does the string \"%s\"have prefix %s? ", str, "Th") //前缀
+  fmt.Printf("%t\n", strings.HasPrefix(str, "Th\n"))
+  fmt.Println("")
+  fmt.Println("Contains 函数的用法")
+  fmt.Println(strings.Contains("seafood", "foo")) //true
+  fmt.Println(strings.Contains("seafood", "bar")) //false
+
+  fmt.Println("Count 函数的用法")
+  fmt.Println(strings.Count("cheese", "e")) // 3
+  fmt.Println(strings.Count("five", ""))
+  fmt.Println("")
+  fmt.Println("Index 函数的用法")
+  fmt.Println(strings.IndexRune("NLT_abc", 'b')) // 返回第一个匹配字符的位置，这里是4
+  fmt.Println(strings.IndexRune("NLT_abc", 's')) // 在存在返回 -1
+  fmt.Println(strings.IndexRune("我是中国人", '中'))   // 在存在返回 6
+
+  fmt.Println("")
+  fmt.Println("Join 函数的用法")
+  s := []string{"foo", "bar", "baz"}
+  fmt.Println(strings.Join(s, ", ")) // 返回字符串：foo, bar, baz
+
+  fmt.Println("")
+  fmt.Println("LastIndex 函数的用法")
+  fmt.Println(strings.LastIndex("go gopher", "go")) // 3
+
+  fmt.Println("")
+  fmt.Println("Replace 函数的用法")
+  fmt.Println(strings.Replace("oink oink oink", "k", "ky", 2))
+  fmt.Println(strings.Replace("oink oink oink", "oink", "moo", -1))
+
+  fmt.Println("")
+  fmt.Println("Split 函数的用法")
+  fmt.Printf("%q\n", strings.Split("a,b,c", ","))
+  fmt.Printf("%q\n", strings.Split("a man a plan a canal panama", "a "))
+  fmt.Printf("%q\n", strings.Split(" xyz ", ""))
+  fmt.Printf("%q\n", strings.Split("", "Bernardo O'Higgins"))
+
+  fmt.Println("")
+  fmt.Println("ToLower 函数的用法")
+  fmt.Println(strings.ToLower("Gopher")) //gopher
+  fmt.Println("")
+
+
+  fmt.Println("strconv.Itoa()函数用法")
+  var an int = 6
+  newS := strconv.Itoa(an)
+  fmt.Printf("The new string is: %s\n", newS)
+}
+```
+执行结果:   
+```
+原生字符串和引用字符串的区别
+This is a raw string \n
+This is a raw string 
+
++连接字符串
+This is a raw string \nThis is a raw string 
+
+HasPrefix 函数的用法
+T/F? Does the string "This is an example of a string"have prefix Th? false
+
+Contains 函数的用法
+true
+false
+Count 函数的用法
+3
+5
+
+Index 函数的用法
+5
+-1
+6
+
+Join 函数的用法
+foo, bar, baz
+
+LastIndex 函数的用法
+3
+
+Replace 函数的用法
+oinky oinky oink
+moo moo moo
+
+Split 函数的用法
+["a" "b" "c"]
+["" "man " "plan " "canal panama"]
+[" " "x" "y" "z" " "]
+[""]
+
+ToLower 函数的用法
+gopher
+
+strconv.Itoa()函数用法
+The new string is: 6
+
+Process finished with exit code 0
+```
+
+- 提供了`strconv.ParseXXX()`来从字符串中解析数字
+```go
+package main
+
+// The built-in package `strconv` provides the number
+// parsing.
+import "strconv"
+import "fmt"
+
+func main() {
+    // With `ParseFloat`, this `64` tells how many bits of
+    // precision to parse.
+    f, _ := strconv.ParseFloat("1.234", 64)
+    fmt.Println(f)
+
+    // For `ParseInt`, the `0` means infer the base from
+    // the string. `64` requires that the result fit in 64
+    // bits.
+    i, _ := strconv.ParseInt("123", 0, 64)
+    fmt.Println(i)
+}
+```
+
+
+字符串和字节数组
+---
+
+字符串的本质就是一个字节数组。在`Go`语言里面字符串和字节数组可以相互进行显式转换，这一性质通常被用来“修改”字符串的内容。
+
+因为`Go`语言中的字符串是不可变的，也就是说`str[index]`这样的表达式是不可以被放在等号左侧的。如果尝试运行`str[i] = 'D'`会得到错误:
+`cannot assign to str[i]`。
+
+因此必须先将字符串转换成字节数组，然后再通过修改数组中的元素值来达到修改字符串的目的，最后将字节数组转换回字符串格式。示例代码如下:   
+
+```go
+package main
+import (
+    "fmt"
+)
+
+var name string //声明一个字符串
+var emptyname string = "" //声明一个空字符串
+
+func main() {
+    //申明多个字符串并且赋值
+    a, b, v := "hello", "word", "widuu"
+    fmt.Println(a, b, v)
+
+    c := []byte(a)   //转换字符串的内容，先转换a的类型为[]byte
+    c[0] = 'n'  //赋值
+    //在转换成字符串类型，其实我们发现我们的a并没有改变
+    //而是一个新的字符串的改变
+    d := string(c)  //转换为字符串
+    fmt.Println(a)  //hello
+    fmt.Println(c)  //[110 101 108 108 111]    
+    fmt.Println(d)  //nello
+
+}
+```
+执行结果:   
+```
+hello word widuu
+hello
+[110 101 108 108 111]
+nello
+```
+
+使用`buffer`高效拼接字符串
+---
+
+`Go`语言中字符串的拼接用`+`:  
+
+```go
+package main
+import (
+    "fmt"
+)
+
+
+func main() {
+    //申明多个字符串并且赋值
+    a, b:= "hello", "world"
+    var c string = a+b  
+    fmt.Println(c)  //helloworld
+
+}
+```
+
+不过用`+`这种合并方式效率非常低，每合并一次，都是创建一个新的字符串,就必须遍历复制一次字符串。 
+`Java`中提供`StringBuilder`类(最高效,线程不安全)来解决这个问题。`Go`中也有类似的机制，那就是`Buffer`(线程不安全)。代码如下:    
+
+```go
+package main
+
+import (
+    "bytes"
+    "fmt"
+)
+
+func main() {
+    var buffer bytes.Buffer
+    for i := 0; i < 100; i++ {
+        buffer.WriteString("a")
+    }
+    fmt.Println(buffer.String())
+}
+```
+
+使用`bytes.Buffer`来组装字符串，不需要复制，只需要将添加的字符串放在缓存末尾即可。不过需要强调，
+`Golang`源码对于`Buffer`的定义中并没有任何关于锁的字段,所以`Buffer`是线程不安全的。
+
+
+标准库的字符串包提供了许多有用的字符串相关函数。这里有一些例子就像使用一个包的感觉。
+将`fmt.Println`别名缩写为一个较短的名称，因为将在下面示例代码中使用它。
+
+```go
+package main
+
+import s "strings"
+import "fmt"
+
+// We alias `fmt.Println` to a shorter name as we'll use
+// it a lot below.
+var p = fmt.Println
+
+func main() {
+    // Not part of `strings`, but worth mentioning here, are
+    // the mechanisms for getting the length of a string in
+    // bytes and getting a byte by index.
+    p("Len: ", len("hello"))
+    p("Char:", "hello"[1])
+}
+
+// Note that `len` and indexing above work at the byte level.
+// Go uses UTF-8 encoded strings, so this is often useful
+// as-is. If you're working with potentially multi-byte
+// characters you'll want to use encoding-aware operations.
+// See [strings, bytes, runes and characters in Go](http://blog.golang.org/strings)
+// for more information.
+```
+
+
+`Go`语言为`printf`传统中的字符串格式化提供了极好的支持。 以下是常见字符串格式化任务的一些示例。
+
+`Go`提供了几种打印“动词”，设计用于格式化一般的值。 例如，打印`point`结构的一个实例。
+
+如果值是一个结构体，`%+v`变体将包括结构体的字段名。
+
+`%#v`变体打印值的`Go`语法表示，即将生成该值的源代码片段。
+
+要打印值的类型，请使用`%T`。格式化布尔是比较直截了当的。有许多格式化整数的选项。对于标准的`base-10`格式化，请使用`％d`。
+
+```go
+package main
+
+import "fmt"
+import "os"
+
+type point struct {
+    x, y int
+}
+
+func main() {
+
+    // Go offers several printing "verbs" designed to
+    // format general Go values. For example, this prints
+    // an instance of our `point` struct.
+    p := point{1, 2}
+    fmt.Printf("%v\n", p)
+
+    // If the value is a struct, the `%+v` variant will
+    // include the struct's field names.
+    fmt.Printf("%+v\n", p)
+
+    // The `%#v` variant prints a Go syntax representation
+    // of the value, i.e. the source code snippet that
+    // would produce that value.
+    fmt.Printf("%#v\n", p)
+
+    // To print the type of a value, use `%T`.
+    fmt.Printf("%T\n", p)
+
+    // Formatting booleans is straight-forward.
+    fmt.Printf("%t\n", true)
+
+    // There are many options for formatting integers.
+    // Use `%d` for standard, base-10 formatting.
+    fmt.Printf("%d\n", 123)
+
+    // This prints a binary representation.
+    fmt.Printf("%b\n", 14)
+
+    // This prints the character corresponding to the
+    // given integer.
+    fmt.Printf("%c\n", 33)
+
+    // `%x` provides hex encoding.
+    fmt.Printf("%x\n", 456)
+
+    // There are also several formatting options for
+    // floats. For basic decimal formatting use `%f`.
+    fmt.Printf("%f\n", 78.9)
+
+    // `%e` and `%E` format the float in (slightly
+    // different versions of) scientific notation.
+    fmt.Printf("%e\n", 123400000.0)
+    fmt.Printf("%E\n", 123400000.0)
+
+    // For basic string printing use `%s`.
+    fmt.Printf("%s\n", "\"string\"")
+
+    // To double-quote strings as in Go source, use `%q`.
+    fmt.Printf("%q\n", "\"string\"")
+
+    // As with integers seen earlier, `%x` renders
+    // the string in base-16, with two output characters
+    // per byte of input.
+    fmt.Printf("%x\n", "hex this")
+
+    // To print a representation of a pointer, use `%p`.
+    fmt.Printf("%p\n", &p)
+
+    // When formatting numbers you will often want to
+    // control the width and precision of the resulting
+    // figure. To specify the width of an integer, use a
+    // number after the `%` in the verb. By default the
+    // result will be right-justified and padded with
+    // spaces.
+    fmt.Printf("|%6d|%6d|\n", 12, 345)
+
+    // You can also specify the width of printed floats,
+    // though usually you'll also want to restrict the
+    // decimal precision at the same time with the
+    // width.precision syntax.
+    fmt.Printf("|%6.2f|%6.2f|\n", 1.2, 3.45)
+
+    // To left-justify, use the `-` flag.
+    fmt.Printf("|%-6.2f|%-6.2f|\n", 1.2, 3.45)
+
+    // You may also want to control width when formatting
+    // strings, especially to ensure that they align in
+    // table-like output. For basic right-justified width.
+    fmt.Printf("|%6s|%6s|\n", "foo", "b")
+
+    // To left-justify use the `-` flag as with numbers.
+    fmt.Printf("|%-6s|%-6s|\n", "foo", "b")
+
+    // So far we've seen `Printf`, which prints the
+    // formatted string to `os.Stdout`. `Sprintf` formats
+    // and returns a string without printing it anywhere.
+    s := fmt.Sprintf("a %s", "string")
+    fmt.Println(s)
+
+    // You can format+print to `io.Writers` other than
+    // `os.Stdout` using `Fprintf`.
+    fmt.Fprintf(os.Stderr, "an %s\n", "error")
+}
+```
+
+`Go`提供对正则表达式的内置支持。
+
+```go
+package main
+
+import "bytes"
+import "fmt"
+import "regexp"
+
+func main() {
+
+    // This tests whether a pattern matches a string.
+    match, _ := regexp.MatchString("p([a-z]+)ch", "peach")
+    fmt.Println(match)
+
+    // Above we used a string pattern directly, but for
+    // other regexp tasks you'll need to `Compile` an
+    // optimized `Regexp` struct.
+    r, _ := regexp.Compile("p([a-z]+)ch")
+
+    // Many methods are available on these structs. Here's
+    // a match test like we saw earlier.
+    fmt.Println(r.MatchString("peach"))
+
+    // This finds the match for the regexp.
+    fmt.Println(r.FindString("peach punch"))
+
+    // This also finds the first match but returns the
+    // start and end indexes for the match instead of the
+    // matching text.
+    fmt.Println(r.FindStringIndex("peach punch"))
+
+    // The `Submatch` variants include information about
+    // both the whole-pattern matches and the submatches
+    // within those matches. For example this will return
+    // information for both `p([a-z]+)ch` and `([a-z]+)`.
+    fmt.Println(r.FindStringSubmatch("peach punch"))
+
+    // Similarly this will return information about the
+    // indexes of matches and submatches.
+    fmt.Println(r.FindStringSubmatchIndex("peach punch"))
+
+    // The `All` variants of these functions apply to all
+    // matches in the input, not just the first. For
+    // example to find all matches for a regexp.
+    fmt.Println(r.FindAllString("peach punch pinch", -1))
+
+    // These `All` variants are available for the other
+    // functions we saw above as well.
+    fmt.Println(r.FindAllStringSubmatchIndex(
+        "peach punch pinch", -1))
+
+    // Providing a non-negative integer as the second
+    // argument to these functions will limit the number
+    // of matches.
+    fmt.Println(r.FindAllString("peach punch pinch", 2))
+
+    // Our examples above had string arguments and used
+    // names like `MatchString`. We can also provide
+    // `[]byte` arguments and drop `String` from the
+    // function name.
+    fmt.Println(r.Match([]byte("peach")))
+
+    // When creating constants with regular expressions
+    // you can use the `MustCompile` variation of
+    // `Compile`. A plain `Compile` won't work for
+    // constants because it has 2 return values.
+    r = regexp.MustCompile("p([a-z]+)ch")
+    fmt.Println(r)
+
+    // The `regexp` package can also be used to replace
+    // subsets of strings with other values.
+    fmt.Println(r.ReplaceAllString("a peach", "<fruit>"))
+
+    // The `Func` variant allows you to transform matched
+    // text with a given function.
+    in := []byte("a peach")
+    out := r.ReplaceAllFunc(in, bytes.ToUpper)
+    fmt.Println(string(out))
+}
+```
+
+
+
+
+
+---
+
+- 邮箱 ：charon.chui@gmail.com  
+- Good Luck! 

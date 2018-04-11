@@ -1,0 +1,296 @@
+Golang错误处理(七)
+===
+
+`Go`编程提供了一个非常简单的错误处理框架，以及内置的错误接口类型，`error`类型实际上是抽象了`Error()`方法的`error`接口，`Golang`使用该接口进行标准的错误处理。`error`对应源代码如下:   
+```go
+type error interface {
+   Error() string
+}
+```
+
+函数通常返回错误作为最后一个返回值。可使用`errors.New()`来构造一个基本的错误消息，如下所示: 
+
+```go
+func Sqrt(value float64)(float64, error) {
+   if(value < 0){
+      return 0, errors.New("Math: negative number passed to Sqrt")
+   }
+   return math.Sqrt(value)
+}
+```
+使用返回值和错误消息，如下所示:    
+```go
+result, err:= Sqrt(-1)
+
+if err != nil {
+   fmt.Println(err)
+}
+
+```
+
+除了上面的`errors.New`用法之外，我们也可以实现`error`接口，自己实现`Error()`方法，来达到自定义参数的错误输出。示例代码如下:   
+```go
+package main
+
+import (
+ "fmt"
+ "math"
+)
+
+type dualError struct {
+ Num     float64
+ problem string
+}
+
+func (e dualError) Error() string {
+  return fmt.Sprintf("Wrong!!!,because \"%f\" is a negative number",e.Num)
+}
+
+func Sqrt(f float64) (float64, error) {
+    if f < 0 {
+        return -1, dualError{Num:f}
+    }
+     return math.Sqrt(f) , nil
+}
+
+
+
+func main(){
+      result, err:= Sqrt(-13)
+      if err != nil   {
+        fmt.Println(err)
+      }else{
+        fmt.Println(result)
+      }
+}
+```
+
+`Go`语言没有像`Java`和`.NET`那样的`try/catch`异常机制:不能执行抛异常操作。但是有一套`defer-panic-and-recover`机制。
+
+`Go`中引入两个内置函数`panic`和`recover`来触发和终止异常处理流程，同时引入关键字`defer`来延迟执行`defer`后面的函数。一直等到包含`defer`语句的函数执行完毕时，延迟函数（`defer`后的函数)才会被执行，而不管包含`defer`语句的函数是通过`return`的正常结束，还是由于`panic`导致的异常结束。你可以在一个函数中执行多条`defer`语句，它们的执行顺序与声明顺序相反。
+
+`panic`介绍
+---
+
+
+当发生像数组下标越界或类型断言失败这样的运行错误时，`Go`运行时会触发运行时`panic`，伴随着程序的崩溃抛出一个`runtime.Error`接口类型的值。这个错误值有个`RuntimeError()`方法用于区别普通错误。
+
+`panic`可以直接从代码初始化:当错误条件（我们所测试的代码）很严苛且不可恢复，程序不能继续运行时，可以使用`panic`函数产生一个中止程序的运行时错误。`panic`接收一个做任意类型的参数，通常是字符串，在程序死亡时被打印出来。`Go`运行时负责中止程序并给出调试信息。
+
+`panic()`是一个内建函数，可以中断原有的控制流程，进入一个令人`panic`(恐慌即`Java`中的异常)的流程中。当函数调用`panic`时，函数的执行会被中断，最简单的`panic`示例代码如下：
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Starting the program")
+    panic("A severe error occurred: stopping the program!")
+    fmt.Println("Ending the program")
+}
+```
+执行结果:   
+```
+Starting the program
+panic: A severe error occurred: stopping the program!
+
+goroutine 1 [running]:
+main.main()
+    /Users/momo/go/src/main/Demo.go:7 +0x79
+```
+
+
+注意：一定要记住，应当把`panic`作为最后的手段来使用，也就是说，你的代码中应当没有或者很少有`panic`的东西。这是个强大的工具，请明智谨慎地使用它。
+
+
+
+
+`defer`
+---
+
+`Go`引入关键字`defer`来延迟执行`defer`后面的函数。一直等到包含`defer`语句的函数执行完毕时，延迟函数（`defer`后的函数）才会被执行，而不管包含`defer`语句的函数是通过`return`的正常结束，还是由于`panic`导致的异常结束。你可以在一个函数中执行多条defer语句，它们的执行顺序与声明顺序相反。
+在`Go`语言中，可以使用关键字`defer`向函数注册退出调用，即主调函数退出时，`defer`后的函数才会被调用。
+
+`defer`语句的作用是不管程序是否出现异常，均在函数退出时自动执行相关代码（相当于`Java`中的`finally`）。当函数执行到最后时，这些`defer`语句会按照逆序执行，最后该函数返回。所以`defer`常用语一些关闭文件流、关闭数据库等最后的资源清理工作。
+
+
+在处理异常时候这个特点很有用处：有`defer`关键字之后，即便函数抛出了异常，也会被执行，这样就不会因程序出现了错误而导致资源不会释放了。
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+    defer fmt.Println("world")
+
+    fmt.Println("hello")
+}
+```
+上面的执行结果是:
+```
+hello      
+world
+```
+
+`defer`栈
+---
+
+延迟的函数调用被压入一个栈中。当函数返回时， 会按照后进先出的顺序调用被延迟的函数调用。
+```go
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("counting")
+
+    for i := 0; i < 10; i++ {
+        defer fmt.Println(i)
+    }
+
+    fmt.Println("done")
+}
+```
+它的执行结果是:  
+
+```
+counting
+done
+9
+8
+7
+6
+5
+4
+3
+2
+1
+0
+```
+
+
+`recover`介绍
+---
+
+`recover`是一个内建的函数，可以让进入令人恐慌的流程中的`goroutine`恢复过来。`recover`仅在延迟函数中有效。在正常的执行过程中，调用`recover`会返回`nil`，并且没有其它任何效果。如果当前的`goroutine`陷入`panic`，调用`recover`可以捕获到`panic`的输入值，并且恢复正常的执行。
+
+一般情况下，`recover()`应该在一个使用`defer`关键字的函数中执行以有效截取错误处理流程。如果没有在发生异常的`goroutine`中明确调用恢复过程（使用`recover`关键字），会导致该`goroutine`所属的进程打印异常信息后直接退出。
+
+从程序栈的角度来讲，`panic`会导致栈被展开直到`defer`修饰的`recover()`被调用或者程序中止。
+
+注意:上面说的`goroutine`是什么意思？`Go`语言里面的并发使用的是`Goroutine`，`Goroutine`可以看做一种轻量级的线程，或者叫用户级线程。与`Java`的`Thread`很像。   
+
+`defer`执行`recover`
+---
+
+
+被`defer`的函数在`return`之后执行，这个时机点正好可以捕获函数抛出的`panic`，因而`defer`的另一个重要用途就是执行`recover`。
+
+`recover`只有在`defer`中使用才更有意义，如果在其他地方使用，由于程序已经调用结束而提前返回而无法有效捕捉错误。
+
+一个展示`panic`，`defer`和`recover`怎么结合使用的完整例子如下:
+```go
+package main
+
+import (
+    "fmt"
+)
+
+func badCall() {
+    panic("bad end")
+}
+
+func test() {
+    defer func() {
+        if e := recover(); e != nil {
+            fmt.Printf("Panicing %s\n", e)
+        }
+    }()
+    badCall()
+    fmt.Printf("After bad call\n")
+}
+
+func main() {
+    fmt.Printf("Calling test\n")
+    test()
+    fmt.Printf("Test completed\n")
+}
+```
+
+执行结果:   
+```
+Calling test
+Panicing bad end
+Test completed
+```
+
+
+`Go`语言的错误处理流程:当一个函数在执行过程中出现了异常或遇到`panic()`，正常语句就会立即终止，然后执行`defer`语句，再报告异常信息，最后退出`goroutine`。如果在`defer`中使用了`recover()`函数,则会捕获错误信息，使该错误信息终止报告。
+
+
+下面实现一个自定义的`Error()`方法，并结合`panic`和`recover`，集中展示下`Go`语言的错误处理机制:  
+
+```go
+package main
+
+import (
+    "fmt"
+)
+
+//自定义错误类型
+type ArithmeticError struct {
+    error
+}
+
+//重写Error()方法
+func (this *ArithmeticError) Error() string {
+    return "自定义的error,error名称为算数不合法"
+}
+
+//定义除法运算函数***这里与本文中第一幕①error接口的例子不同
+func Devide(num1, num2 int) int {
+    if num2 == 0 {
+        panic(&ArithmeticError{}) //当然也可以使用ArithmeticError{}同时recover等到ArithmeticError类型
+    } else {
+        return num1 / num2
+    }
+}
+func main() {
+    var a, b int
+    fmt.Scanf("%d %d", &a, &b)
+
+    defer func() {
+        if r := recover(); r != nil {
+            fmt.Printf("panic的内容%v\n", r)
+            if _, ok := r.(error); ok {
+                fmt.Println("panic--recover()得到的是error类型")
+            }
+            if _, ok := r.(*ArithmeticError); ok {
+                fmt.Println("panic--recover()得到的是ArithmeticError类型")
+            }
+            if _, ok := r.(string); ok {
+                fmt.Println("panic--recover()得到的是string类型")
+            }
+        }
+    }()
+
+    rs := Devide(a, b)
+    fmt.Println("结果是：", rs)
+}
+```
+
+运行，输入`ddd`:    
+```
+ddd
+panic的内容自定义的error,error名称为算数不合法
+panic--recover()得到的是error类型
+panic--recover()得到的是ArithmeticError类型
+```
+
+
+---
+
+- 邮箱 ：charon.chui@gmail.com  
+- Good Luck! 

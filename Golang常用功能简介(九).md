@@ -1,0 +1,495 @@
+Golang常用功能简介(九)
+===
+
+
+排序
+---
+
+`Go`语言的`sort`包实现了内置和用户定义类型的排序。我们先看看内置的排序。排序方法特定于内置类型; 这里是一个字符串的例子。 请注意，排序是就地排序，因此它会更改给定的切片，并且不返回新的切片。
+
+这里例举一个排序int类型数值的一个例子。
+
+也可以使用`sort`来检查切片是否已经按照排序顺序。
+
+运行程序打印排序的字符串，以及`int`数据值和`true`作为`AreSorted`测试的结果。
+
+```go
+package main
+
+import "fmt"
+import "sort"
+
+func main() {
+
+    // Sort methods are specific to the builtin type;
+    // here's an example for strings. Note that sorting is
+    // in-place, so it changes the given slice and doesn't
+    // return a new one.
+    strs := []string{"c", "a", "b"}
+    sort.Strings(strs)
+    fmt.Println("Strings:", strs)
+
+    // An example of sorting `int`s.
+    ints := []int{7, 2, 4}
+    sort.Ints(ints)
+    fmt.Println("Ints:   ", ints)
+
+    // We can also use `sort` to check if a slice is
+    // already in sorted order.
+    s := sort.IntsAreSorted(ints)
+    fmt.Println("Sorted: ", s)
+}
+```
+
+输出结果为:   
+```
+Strings: [a b c]
+Ints:    [2 4 7]
+Sorted:  true
+```
+
+
+`json`
+---
+
+
+`Go`提供对`JSON`编码和解码的内置支持，由标准库中的`encoding/json`、`encoding/xml`、`encoding/asn1`等包提供支持,
+包括内置和自定义数据类型。
+我们将使用两个结构来演示下面的自定义类型的编码和解码。
+
+首先，我们将看到基本数据类型到`JSON`字符串的编码。 这里有一些原子值的例子。
+```go
+package main
+
+import "encoding/json"
+import "fmt"
+import "os"
+
+// We'll use these two structs to demonstrate encoding and
+// decoding of custom types below.
+type Response1 struct {
+    Page   int
+    Fruits []string
+}
+type Response2 struct {
+    Page   int      `json:"page"`
+    Fruits []string `json:"fruits"`
+}
+
+func main() {
+
+    // First we'll look at encoding basic data types to
+    // JSON strings. Here are some examples for atomic
+    // values.
+    bolB, _ := json.Marshal(true)
+    fmt.Println(string(bolB))
+
+    intB, _ := json.Marshal(1)
+    fmt.Println(string(intB))
+
+    fltB, _ := json.Marshal(2.34)
+    fmt.Println(string(fltB))
+
+    strB, _ := json.Marshal("gopher")
+    fmt.Println(string(strB))
+
+    // And here are some for slices and maps, which encode
+    // to JSON arrays and objects as you'd expect.
+    slcD := []string{"apple", "peach", "pear"}
+    slcB, _ := json.Marshal(slcD)
+    fmt.Println(string(slcB))
+
+    mapD := map[string]int{"apple": 5, "lettuce": 7}
+    mapB, _ := json.Marshal(mapD)
+    fmt.Println(string(mapB))
+
+    // The JSON package can automatically encode your
+    // custom data types. It will only include exported
+    // fields in the encoded output and will by default
+    // use those names as the JSON keys.
+    res1D := &Response1{
+        Page:   1,
+        Fruits: []string{"apple", "peach", "pear"}}
+    res1B, _ := json.Marshal(res1D)
+    fmt.Println(string(res1B))
+
+    // You can use tags on struct field declarations
+    // to customize the encoded JSON key names. Check the
+    // definition of `Response2` above to see an example
+    // of such tags.
+    res2D := &Response2{
+        Page:   1,
+        Fruits: []string{"apple", "peach", "pear"}}
+    res2B, _ := json.Marshal(res2D)
+    fmt.Println(string(res2B))
+
+    // Now let's look at decoding JSON data into Go
+    // values. Here's an example for a generic data
+    // structure.
+    byt := []byte(`{"num":6.13,"strs":["a","b"]}`)
+
+    // We need to provide a variable where the JSON
+    // package can put the decoded data. This
+    // `map[string]interface{}` will hold a map of strings
+    // to arbitrary data types.
+    var dat map[string]interface{}
+
+    // Here's the actual decoding, and a check for
+    // associated errors.
+    if err := json.Unmarshal(byt, &dat); err != nil {
+        panic(err)
+    }
+    fmt.Println(dat)
+
+    // In order to use the values in the decoded map,
+    // we'll need to cast them to their appropriate type.
+    // For example here we cast the value in `num` to
+    // the expected `float64` type.
+    num := dat["num"].(float64)
+    fmt.Println(num)
+
+    // Accessing nested data requires a series of
+    // casts.
+    strs := dat["strs"].([]interface{})
+    str1 := strs[0].(string)
+    fmt.Println(str1)
+
+    // We can also decode JSON into custom data types.
+    // This has the advantages of adding additional
+    // type-safety to our programs and eliminating the
+    // need for type assertions when accessing the decoded
+    // data.
+    str := `{"page": 1, "fruits": ["apple", "peach"]}`
+    res := Response2{}
+    json.Unmarshal([]byte(str), &res)
+    fmt.Println(res)
+    fmt.Println(res.Fruits[0])
+
+    // In the examples above we always used bytes and
+    // strings as intermediates between the data and
+    // JSON representation on standard out. We can also
+    // stream JSON encodings directly to `os.Writer`s like
+    // `os.Stdout` or even HTTP response bodies.
+    enc := json.NewEncoder(os.Stdout)
+    d := map[string]int{"apple": 5, "lettuce": 7}
+    enc.Encode(d)
+}
+```
+
+执行结果:   
+```
+true
+1
+2.34
+"gopher"
+["apple","peach","pear"]
+{"apple":5,"lettuce":7}
+{"Page":1,"Fruits":["apple","peach","pear"]}
+{"page":1,"fruits":["apple","peach","pear"]}
+map[num:6.13 strs:[a b]]
+6.13
+a
+{1 [apple peach]}
+apple
+{"apple":5,"lettuce":7}
+```
+
+
+时间日期
+---
+
+`Go`编程为时间和持续时间提供广泛的支持; 时间日期都是`time`类。
+
+```go
+package main
+
+import "fmt"
+import "time"
+
+func main() {
+    p := fmt.Println
+
+    // We'll start by getting the current time.
+    now := time.Now()
+    p(now)
+
+    // You can build a `time` struct by providing the
+    // year, month, day, etc. Times are always associated
+    // with a `Location`, i.e. time zone.
+    then := time.Date(
+        2009, 11, 17, 20, 34, 58, 651387237, time.UTC)
+    p(then)
+
+    // You can extract the various components of the time
+    // value as expected.
+    p(then.Year())
+    p(then.Month())
+    p(then.Day())
+    p(then.Hour())
+    p(then.Minute())
+    p(then.Second())
+    p(then.Nanosecond())
+    p(then.Location())
+
+    // The Monday-Sunday `Weekday` is also available.
+    p(then.Weekday())
+
+    // These methods compare two times, testing if the
+    // first occurs before, after, or at the same time
+    // as the second, respectively.
+    p(then.Before(now))
+    p(then.After(now))
+    p(then.Equal(now))
+
+    // The `Sub` methods returns a `Duration` representing
+    // the interval between two times.
+    diff := now.Sub(then)
+    p(diff)
+
+    // We can compute the length of the duration in
+    // various units.
+    p(diff.Hours())
+    p(diff.Minutes())
+    p(diff.Seconds())
+    p(diff.Nanoseconds())
+
+    // You can use `Add` to advance a time by a given
+    // duration, or with a `-` to move backwards by a
+    // duration.
+    p(then.Add(diff))
+    p(then.Add(-diff))
+}
+```
+
+`URL`解析
+---
+
+`URL`提供了一种统一的方法来定位资源。 以下是在`Go`中解析网址的方法。这里将解析此示例URL，其中包括方案，身份验证信息，主机，端口，路径，查询参数和查询片段。
+解析`URL`并确保没有错误。  
+```go
+package main
+
+import "fmt"
+import "net"
+import "net/url"
+
+func main() {
+
+    // We'll parse this example URL, which includes a
+    // scheme, authentication info, host, port, path,
+    // query params, and query fragment.
+    s := "postgres://user:pass@host.com:5432/path?k=v#f"
+
+    // Parse the URL and ensure there are no errors.
+    u, err := url.Parse(s)
+    if err != nil {
+        panic(err)
+    }
+
+    // Accessing the scheme is straightforward.
+    fmt.Println(u.Scheme)
+
+    // `User` contains all authentication info; call
+    // `Username` and `Password` on this for individual
+    // values.
+    fmt.Println(u.User)
+    fmt.Println(u.User.Username())
+    p, _ := u.User.Password()
+    fmt.Println(p)
+
+    // The `Host` contains both the hostname and the port,
+    // if present. Use `SplitHostPort` to extract them.
+    fmt.Println(u.Host)
+    host, port, _ := net.SplitHostPort(u.Host)
+    fmt.Println(host)
+    fmt.Println(port)
+
+    // Here we extract the `path` and the fragment after
+    // the `#`.
+    fmt.Println(u.Path)
+    fmt.Println(u.Fragment)
+
+    // To get query params in a string of `k=v` format,
+    // use `RawQuery`. You can also parse query params
+    // into a map. The parsed query param maps are from
+    // strings to slices of strings, so index into `[0]`
+    // if you only want the first value.
+    fmt.Println(u.RawQuery)
+    m, _ := url.ParseQuery(u.RawQuery)
+    fmt.Println(m)
+    fmt.Println(m["k"][0])
+}
+```
+
+执行结果是:   
+```
+postgres
+user:pass
+user
+pass
+host.com:5432
+host.com
+5432
+/path
+f
+k=v
+map[k:[v]]
+v
+```
+
+
+`io`操作
+---
+
+读取和写入文件是许多`Go`程序所需的基本任务。首先我们来看一些读取文件的例子。读取文件需要检查大多数调用错误。
+```go
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "io"
+    "io/ioutil"
+    "os"
+)
+
+// Reading files requires checking most calls for errors.
+// This helper will streamline our error checks below.
+func check(e error) {
+    if e != nil {
+        panic(e)
+    }
+}
+
+func main() {
+
+    // Perhaps the most basic file reading task is
+    // slurping a file's entire contents into memory.
+    dat, err := ioutil.ReadFile("/tmp/dat")
+    check(err)
+    fmt.Print(string(dat))
+
+    // You'll often want more control over how and what
+    // parts of a file are read. For these tasks, start
+    // by `Open`ing a file to obtain an `os.File` value.
+    f, err := os.Open("/tmp/dat")
+    check(err)
+
+    // Read some bytes from the beginning of the file.
+    // Allow up to 5 to be read but also note how many
+    // actually were read.
+    b1 := make([]byte, 5)
+    n1, err := f.Read(b1)
+    check(err)
+    fmt.Printf("%d bytes: %s\n", n1, string(b1))
+
+    // You can also `Seek` to a known location in the file
+    // and `Read` from there.
+    o2, err := f.Seek(6, 0)
+    check(err)
+    b2 := make([]byte, 2)
+    n2, err := f.Read(b2)
+    check(err)
+    fmt.Printf("%d bytes @ %d: %s\n", n2, o2, string(b2))
+
+    // The `io` package provides some functions that may
+    // be helpful for file reading. For example, reads
+    // like the ones above can be more robustly
+    // implemented with `ReadAtLeast`.
+    o3, err := f.Seek(6, 0)
+    check(err)
+    b3 := make([]byte, 2)
+    n3, err := io.ReadAtLeast(f, b3, 2)
+    check(err)
+    fmt.Printf("%d bytes @ %d: %s\n", n3, o3, string(b3))
+
+    // There is no built-in rewind, but `Seek(0, 0)`
+    // accomplishes this.
+    _, err = f.Seek(0, 0)
+    check(err)
+
+    // The `bufio` package implements a buffered
+    // reader that may be useful both for its efficiency
+    // with many small reads and because of the additional
+    // reading methods it provides.
+    r4 := bufio.NewReader(f)
+    b4, err := r4.Peek(5)
+    check(err)
+    fmt.Printf("5 bytes: %s\n", string(b4))
+
+    // Close the file when you're done (usually this would
+    // be scheduled immediately after `Open`ing with
+    // `defer`).
+    f.Close()
+}
+```
+
+写入:   
+```go
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "io/ioutil"
+    "os"
+)
+
+func check(e error) {
+    if e != nil {
+        panic(e)
+    }
+}
+
+func main() {
+
+    // To start, here's how to dump a string (or just
+    // bytes) into a file.
+    d1 := []byte("hello\ngo\n")
+    err := ioutil.WriteFile("dat1.txt", d1, 0644)
+    check(err)
+
+    // For more granular writes, open a file for writing.
+    f, err := os.Create("dat2.txt")
+    check(err)
+
+    // It's idiomatic to defer a `Close` immediately
+    // after opening a file.
+    defer f.Close()
+
+    // You can `Write` byte slices as you'd expect.
+    d2 := []byte{115, 111, 109, 101, 10}
+    n2, err := f.Write(d2)
+    check(err)
+    fmt.Printf("wrote %d bytes\n", n2)
+
+    // A `WriteString` is also available.
+    n3, err := f.WriteString("writes\n")
+    fmt.Printf("wrote %d bytes\n", n3)
+
+    // Issue a `Sync` to flush writes to stable storage.
+    f.Sync()
+
+    // `bufio` provides buffered writers in addition
+    // to the buffered readers we saw earlier.
+    w := bufio.NewWriter(f)
+    n4, err := w.WriteString("buffered\n")
+    fmt.Printf("wrote %d bytes\n", n4)
+
+    // Use `Flush` to ensure all buffered operations have
+    // been applied to the underlying writer.
+    w.Flush()
+}
+```
+执行结果是:   
+```
+wrote 5 bytes
+wrote 7 bytes
+wrote 9 bytes
+```
+
+
+---
+
+- 邮箱 ：charon.chui@gmail.com  
+- Good Luck! 
