@@ -161,6 +161,7 @@ func printSlice(x []int){
 ```
 
 如果缺省情况下声明没有输入切片，则将其初始化为`nil`。 其长度和容量为零。 
+按照`Go`语言规范，任何类型在未初始化时都对应一个零值:布尔类型是`false`，整型是`0`，字符串是`""`，而指针，函数，`interface`，`slice`，`channel`和`map`的零值都是nil
 ```go
 package main
 

@@ -5,20 +5,110 @@ Golang方法(十)
 方法
 ---
 
-在`Go`语言中有一个概念和函数极其相似，叫做方法。`Go`语言的方法其实是作用在接收者`（receiver）`上的一个函数，接收者是某种非内置类型的变量。因此方法是一种特殊类型的函数。
+在`Go`语言中有一个概念和函数极其相似，叫做方法。`Go`语言的方法其实是作用在接收者`(receiver)`上的一个函数，接收者是某种非内置类型的变量。***方法是与对象实例绑定的一种特殊的函数***
 
 接收者类型可以是（几乎）任何类型，不仅仅是结构体类型:任何类型都可以有方法，甚至可以是函数类型，可以是`int`、`bool`、`string`或数组的别名类型。但是接收者不能是一个接口类型。
-
-方法的声明和普通函数的声明类似，只是在函数名称前面多了一个参数，这个参数把这个方法绑定到这个参数对应的类型上。
 
 和函数关系
 ---
 
-方法是特殊的函数，定义在某一特定的类型上，通过类型的实例来进行调用，这个实例被叫接收者`(receiver)`。
-函数将变量作为参数:`Function1(recv)`
-方法在变量上被调用:`recv.Method1()`
-接收者必须有一个显式的名字，这个名字必须在方法中被使用。
-`receiver_type`叫做(接收者)基本类型，这个类型必须在和方法同样的包中被声明。
+方法和函数的区别是:方法在定义的时候，会在`func`和方法名之间增加一个参数，这个参数就是接收者，这样我们定义的这个方法就和接收者绑定在了一起，称之为这个接收者的方法。
+```go
+type Person struct {
+	name string
+}
+func (p Person) getName() string{
+	return "the person name is "+p.name
+}
+```
+
+留意例子中，`func`和方法名之间增加的参数`(p Person)`,这个就是接收者。现在我们说，类型`person`有了一个`getName()`方法，现在我们看下如何使用它:   
+```go
+func main() {
+	p := Person{name: "张三"}
+	fmt.Println(p.getName())
+}
+```
+
+`Go`语言里有两种类型的接收者:     
+
+- 值接收者
+- 指针接收者
+
+我们上面的例子中，就是使用值类型接收者的示例。
+
+使用值类型接收者定义的方法，在调用的时候，使用的其实是值接收者的一个副本，所以对该值的任何操作，不会影响原来的类型变量。
+```go
+package main
+
+import "fmt"
+
+type Person struct {
+	name string
+}
+
+func (p Person) getName() string {
+	return "the person name is " + p.name
+}
+
+func (p Person) changeName() string {
+	p.name = "zhaosi"
+	return p.name
+}
+
+func main() {
+	p := Person{name: "张三"}
+	fmt.Println(p.getName())
+	fmt.Println(p.changeName())
+	fmt.Println(p.getName())
+}
+```
+
+执行结果:   
+```
+the person name is 张三
+zhaosi
+the person name is 张三
+```
+
+以上的例子，打印出来的值还是张三，对其进行的修改无效。如果我们使用一个指针作为接收者，那么就会其作用了，因为指针接收者传递的是一个指向原值指针的副本，指针的副本，指向的还是原来类型的值，所以修改时，同时也会影响原来类型变量的值:      
+```go
+package main
+
+import "fmt"
+
+type Person struct {
+	name string
+}
+
+func (p Person) getName() string {
+	return "the person name is " + p.name
+}
+// 只是改了这里，改成了Person指针的方法
+func (p *Person) changeName() string {
+	p.name = "zhaosi"
+	return p.name
+}
+
+func main() {
+	p := Person{name: "张三"}
+	fmt.Println(p.getName())
+	// 或者这样写也可以fmt.Println((&p).changeName()),方法的调用，既可以使用值，也可以使用指针，我们不必要严格的遵守这些，Go语言编译器会帮我们进行自动转义的，这大大方便了我们开发者。
+	fmt.Println(p.changeName())  
+	fmt.Println(p.getName())
+}
+```
+执行结果:   
+```
+the person name is 张三
+zhaosi
+the person name is zhaosi
+```
+
+从上面可以看到只需要改动一下，变成指针的接收者，就可以完成了修改。
+
+> 在调用方法的时候，传递的接收者本质上都是副本，只不过一个是这个值副本，一是指向这个值指针的副本。指针具有指向原有值的特性，所以修改了指针指向的值，也就修改了原有的值。我们可以简单的理解为值接收者使用的是值的副本来调用方法，而指针接收者使用实际的值来调用方法。
+
 
 在`Go`中，(接收者)类型关联的方法不写在类型结构里面，就像类那样；耦合更加宽松；类型和方法之间的关联由接收者来建立。 
 方法没有和数据定义（结构体）混在一起：它们是正交的类型；表示（数据）和行为（方法）是独立的。

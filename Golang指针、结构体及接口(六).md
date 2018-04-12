@@ -5,7 +5,7 @@ Golang指针、结构体及接口(六)
 指针
 ---
 
-一个指针可以指向任何一个值的内存地址 它指向那个值的内存地址，在32位机器上占用4个字节，在64位机器上占用8个字节，
+一个指针可以指向任何一个值的内存地址,它指向那个值的内存地址，在32位机器上占用4个字节，在64位机器上占用8个字节，
 并且与它所指向的值的大小无关。当然，可以声明指针指向任何类型的值来表明它的原始性或结构性；
 你可以在指针类型前面加上`*`号来获取指针所指向的内容，这里的`*`号是一个类型更改器。使用一个指针引用一个值被称为间接引用。
 
@@ -30,7 +30,8 @@ func main() {
 }
 ```
 
-指针是一个变量，其值是另一个变量的地址，即存储器位置的直接地址。类似变量或常量一样，必须要先声明一个指针，然后才能使用它来存储任何变量地址。指针变量声明的一般形式是：
+指针是一个变量，其值是另一个变量的地址，即存储器位置的直接地址。类似变量或常量一样，必须要先声明一个指针，然后才能使用它来存储任何变量地址。
+指针变量声明的一般形式是：
 类型`*T`是指向类型`T`的值的指针。指针变量声明的一般形式是:  
 ```go
 var var-name *var-type
@@ -38,14 +39,6 @@ var var-name *var-type
 
 这里，`var-type`是指针的基类型; 它必须是有效的`Go`数据类型，`var-name`是指针变量的名称。
 用于声明指针的星号`(*)`与用于乘法的星号相同。但是，在此语句中，星号`(*)`用于将变量指定为指针。
-```go
-var p *int
-```
-
-`Go`编译器为指针变量分配一个`Nil`值，以防指针没有确切的地址分配。这是在变量声明的时候完成的。指定为`nil`值的指针称为`nil`指针。
-
-`nil`指针是在几个标准库中定义的值为零的常量。
-
 ```go
 package main
 
@@ -58,9 +51,9 @@ func main() {
 }
 ```
 
-当上面的代码编译和执行时，它产生结果是`The value of ptr is 0`，
-
-在大多数操作系统上，程序不允许访问地址0处的内存，因为该内存是由操作系统保留的。 然而，存储器地址`0`具有特殊意义; 它表示指针不打算指向可访问的存储器位置。但是按照惯例，如果指针包含`nil`(零)值，则假设它不指向任何东西。
+当上面的代码编译和执行时，它产生结果是`The value of ptr is 0`，    
+在大多数操作系统上，程序不允许访问地址0处的内存，因为该内存是由操作系统保留的。然而存储器地址`0`具有特殊意义; 它表示指针不打算指向可访问的存储器位置。
+但是按照惯例，如果指针包含`nil`(零)值，则假设它不指向任何东西。
 
 要检查是否为`nil`指针，可以使用`if`语句，如下所示:   
 ```go
@@ -82,7 +75,7 @@ fmt.Println(*p) // 通过指针 p 读取 i
 
 这也就是通常所说的“间接引用”或“非直接引用”。
 与`C`不同，`Go`没有指针运算。
-```
+```go
 package main
 
 import "fmt"
@@ -126,8 +119,9 @@ type Student struct {
 }
 
 func main(){
-    pp := new(Student)                                  //使用 new 关键字创建一个指针
-    *pp = Student{"qishuangming", 23, 65.0, []int{2, 3, 6}}
+	//使用new关键字创建一个指针
+    pp := new(Student)                                  
+    *pp = Student{"xiaoming", 23, 65.0, []int{2, 3, 6}}
     fmt.Printf("stu pp have %d subjects\n", len((*pp).score))
     fmt.Printf("stu pp have %d subjects\n", len(pp.score)) //Go语言自带隐式解引用
 }
@@ -172,7 +166,7 @@ func main() {
     fmt.Println(Vertex{1, 2}) // {1 2}
     v := Vertex{1, 2}
     v.X = 4
-    fmt.Println(v.X). // 4
+    fmt.Println(v.X)    // 4
 }
 ```
 结构体字段可以通过结构体指针来访问。
@@ -192,8 +186,10 @@ type Student struct {
 }
 
 func main() {
-    stu01 := Student{"stu01", 23, 55.5, []int{95, 96, 98}}                //按照字段顺序进行初始化
-    stu02 := Student{age: 23, weight: 55.5, score: []int{97, 98}, name: "stu02"} ///通过 field:value 形式初始化，该方式可以自定义初始化字段的顺序
+	//按照字段顺序进行初始化
+    stu01 := Student{"xiaomi", 23, 55.5, []int{95, 96, 98}}                
+    //通过 field:value 形式初始化，该方式可以自定义初始化字段的顺序
+    stu02 := Student{age: 23, weight: 55.5, score: []int{97, 98}, name: "xiaohong"} 
     stu01.age = 25
     fmt.Println(stu01.age)
     fmt.Println(stu02)
@@ -233,7 +229,7 @@ func main() {
 变量`t`是一个指向`T`的指针，此时结构体字段的值是它们所属类型的零值。     
 声明`var t  T`也会给`t`分配内存，并零值化内存，但是这个时候`t`是类型`T`。在这两种方式中，`t`通常被称做类型T的一个实例`（instance）`或对象`（Object）`。
 
-一个简单的结构体new函数的例子如下:    
+一个简单的结构体`new`函数的例子如下:    
 ```go
 package main
 import "fmt"
@@ -245,7 +241,7 @@ type struct1 struct {
 }
 
 func main() {
-    ms := new(struct1)
+    ms := new(struct1) // ms是结构体struct1的指针
     ms.i1 = 10
     ms.f1 = 15.5
     ms.str= "Chris"
@@ -323,6 +319,8 @@ outer2 is: {6 7.5 60 {5 10}}
 
 同样地结构体也是一种数据类型，所以它也可以作为一个匿名字段来使用，如同上面例子中那样。
 外层结构体通过`outer.in1`直接进入内层结构体的字段，内嵌结构体甚至可以来自其他包。
+
+在其他语言中，有继承可以做同样的事情，但是在`Go`语言中，没有继承的概念，`Go`提倡的代码复用的方式是组合，所以这也是嵌入类型的意义所在，组合而不是继承，所以`Go`才会更灵活。
 内层结构体被简单的插入或者内嵌进外层结构体。这个简单的“继承”机制提供了一种方式，使得可以从另外一个或一些类型继承部分
 或全部实现。
 ```go
@@ -352,12 +350,42 @@ func main() {
 {1 2}
 ```
 
+同样这种嵌入类型也可以使用到接口中:   
+```go
+type Reader interface {
+    Read(p []byte) (n int, err error)
+}
+type Writer interface {
+    Write(p []byte) (n int, err error)
+}
+type Closer interface {
+    Close() error
+}
+type ReadWriter interface {
+    Reader
+    Writer
+}
+type ReadCloser interface {
+    Reader
+    Closer
+}
+type WriteCloser interface {
+    Writer
+    Closer
+}
+```
+
+以上是标准库`io`包里，我们常用的接口，可以看到`ReadWriter`接口是嵌入`Reader`和`Reader`接口而组合成的新接口，这样我们就不用重复的定义被嵌入接口里的方法，直接通过嵌入就可以了。
+
+
+
 接口
 ---
 
 
 `Go`编程提供了另一种称为接口`(interfaces)`的数据类型，它代表一组方法签名。
-定义了一个接口之后，一般使用一个自定义结构体`(struct)`去实现接口中的方法。`struct`数据类型实现这些接口以具有接口的方法签名的方法定义。
+定义了一个接口之后，一般使用一个自定义结构体`(struct)`去实现接口中的方法。在`Go`语言中，任何实现了接口的函数的类型，都可以看作是接口的一个实现。
+在`Go`中，如果你这个类型（基本类型，结构体等都可以）拥有了接口的所有方法，那么就默认为这个类型实现了这个接口，是隐式的，不需要和`java`一样，强制使用`implement`强制实现。
 
 ```go
 /* define an interface */
@@ -388,35 +416,44 @@ func (struct_name_variable struct_name) method_namen() [return_type] {
 package main
 
 import (
-    "fmt"
+	"fmt"
 )
 
 type Phone interface {
-    call()
+	call()
 }
 
-type NokiaPhone struct {}
-type IPhone struct {}
+type NokiaPhone struct{}
+type IPhone struct{}
 
+// NokiaPhone结构体实现Phone接口的call方法
 func (nokiaPhone NokiaPhone) call() {
-    fmt.Println("I am Nokia, I can call you!")
+	fmt.Println("I am Nokia, I can call you!")
 }
 
+// IPhone结构体实现Phone接口的call方法
 func (iPhone IPhone) call() {
-    fmt.Println("I am iPhone, I can call you!")
+	fmt.Println("I am iPhone, I can call you!")
 }
 
 func main() {
-    var phone Phone
+	var phone Phone
 
-    phone = new(NokiaPhone)
-    phone.call()
+	phone = NokiaPhone{}
+	phone.call()
 
-    phone = new(IPhone)
-    phone.call()
-
+	phone = IPhone{}
+	phone.call()
 }
 ```
+执行结果:   
+```shell
+I am Nokia, I can call you!
+I am iPhone, I can call you!
+```
+
+
+
 
 ---
 

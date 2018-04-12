@@ -21,6 +21,8 @@ Golang简介(一)
 学习`Go`语言的第一步是先去官网上下载安装`go`:   
 <img src="https://raw.githubusercontent.com/CharonChui/Pictures/master/go_download.png?raw=true" width="100%"/>
 
+`Mac`安装版下载后双击可以看到安装界面，按照提示一步步选择操作即可。安装版默认安装目录是`/usr/local/go`，并且也会自动的把`/usr/local/go/bin`目录加入到`PATH`环境变量中，重新打开一个终端，就可以使用`go version`进行测试了，更快捷方便一些。
+
 
 `Go`语言程序可以从3行到数百万行，代码可通过写入到一个或多个扩展名`.go`的文本文件。例如，`hello.go`。
 
@@ -59,6 +61,23 @@ go build hello_world.go
 - 变量
 - 语句和表达式
 - 注释
+
+
+工作目录
+---
+
+工作目录就是我们用来存放开发的源代码的地方，对应的也是`Go`里的`GOPATH`这个环境变量。这个环境变量指定之后，我们编译源代码等生成的文件都会放到这个目录下.这个工作目录我们可以根据自己的设置指定，比如我的`Mac`在`user/xxx/go`下该目录下有3个子目录，他们分别是：
+```
+.
+├── bin
+├── pkg
+└── src
+```
+
+- `bin`文件夹存放命名生成的可执行文件
+- `pkg`文件夹是存在`go`编译生成的文件。
+- `src`存放的是我们的`go`源代码，不同工程项目的代码以包名区分。
+
 
 在上面的示例代码中`fmt.Println("hello world")`的`P`是大写的，这与`java`有些不同，方法不都是小写的吗？ 
 
