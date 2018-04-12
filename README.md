@@ -24,6 +24,9 @@ Golang学习笔记
 - [Golang方法(十)][10]
 - [Golang反射(十一)][11]
 - [Golang开发之IDE选择(十二)][12]
+- [Golang new和make的区别(十三)][16]
+
+
 
 - [Golang进行Web开发][13]
     - [搭建一个Web服务器(一)][14]
@@ -47,6 +50,8 @@ Golang学习笔记
 [13]: https://github.com/CharonChui/GolangStudyNote/tree/master/Golang%E8%BF%9B%E8%A1%8CWeb%E5%BC%80%E5%8F%91   "Golang进行Web开发"
 [14]: https://github.com/CharonChui/GolangStudyNote/blob/master/Golang%E8%BF%9B%E8%A1%8CWeb%E5%BC%80%E5%8F%91/%E6%90%AD%E5%BB%BA%E4%B8%80%E4%B8%AAWeb%E6%9C%8D%E5%8A%A1%E5%99%A8(%E4%B8%80).md   "搭建一个Web服务器(一).md"
 [15]: https://github.com/CharonChui/GolangStudyNote/blob/master/Golang%E8%BF%9B%E8%A1%8CWeb%E5%BC%80%E5%8F%91/Go%E6%90%AD%E5%BB%BAWeb%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%9A%84%E6%89%A7%E8%A1%8C%E8%BF%87%E7%A8%8B(%E4%BA%8C).md   "Go搭建Web服务器的执行过程(二).md"
+[16]: https://github.com/CharonChui/GolangStudyNote/blob/master/Golang%20new%E5%92%8Cmake%E7%9A%84%E5%8C%BA%E5%88%AB(%E5%8D%81%E4%B8%89).md   "Golang new和make的区别(十三)"
+
 
 Developed By
 ===
