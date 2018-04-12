@@ -1,0 +1,479 @@
+Go搭建Web服务器的执行过程(二)
+===
+
+Web相关的几个概念:   
+
+- `Request`:用户请求的信息，用来解析用户的请求信息，包括`post`、`get`、`cookie`、`url`等信息
+- `Response`:服务器需要反馈给客户端的信息
+- `Conn`:用户的每次请求链接
+- `Handler`:处理请求和生成返回信息的处理逻辑
+
+用`Go`实现`Web`服务的工作模式流程图:    
+
+![Image](https://raw.githubusercontent.com/CharonChui/Pictures/master/go_web_list.png?raw=true)
+
+
+其实主要是三步:   
+
+- 创建`Listen Socket`, 监听指定的端口, 等待客户端请求到来。
+- `Listen Socket`接受客户端的请求,得到`Client Socket`,接下来通过`Client Socket`与客户端通信。
+- 处理客户端的请求,首先从`Client Socket`读取`HTTP`请求的协议头, 如果是`POST`方法,还可能要读取客户端提交的数据,然后交给相应的`handler`处理请求,`handler`处理完毕准备好客户端需要的数据, 通过`Client Socket`写给客户端。
+
+
+下面就来分析一下`go`搭建`web`是怎么执行的，其实我们把上面的代码如果去掉解析请求参数的部分后，就会很简单:   
+```go
+func main() {
+	http.HandleFunc("/", sayHello)
+	err := http.ListenAndServe(":9999", nil)
+	if err != nil {
+		log.Fatalf("ListenAndServe: ", err)
+	}
+}
+func sayHello(writer http.ResponseWriter, request *http.Request) {
+	fmt.Fprintf(writer, "Hello World")
+}
+```
+
+其实最核心的方法就是`http.ListenAndServe()`，我们去看一下它的源码:   
+```go
+// ListenAndServe always returns a non-nil error.
+func ListenAndServe(addr string, handler Handler) error {
+	// 创建一个Server
+	server := &Server{Addr: addr, Handler: handler}
+	return server.ListenAndServe()
+}
+```
+上面的`Server`结构体是什么呢？ 
+```go
+// A Server defines parameters for running an HTTP server.
+// The zero value for Server is a valid configuration.
+type Server struct {
+	Addr    string  // TCP address to listen on, ":http" if empty
+	Handler Handler // handler to invoke, http.DefaultServeMux if nil
+
+	// TLSConfig optionally provides a TLS configuration for use
+	// by ServeTLS and ListenAndServeTLS. Note that this value is
+	// cloned by ServeTLS and ListenAndServeTLS, so it's not
+	// possible to modify the configuration with methods like
+	// tls.Config.SetSessionTicketKeys. To use
+	// SetSessionTicketKeys, use Server.Serve with a TLS Listener
+	// instead.
+	TLSConfig *tls.Config
+
+	...
+}
+```
+那`server.ListenAndServe()`方法是什么呢?   
+```go
+// ListenAndServe listens on the TCP network address srv.Addr and then
+// calls Serve to handle requests on incoming connections.
+// Accepted connections are configured to enable TCP keep-alives.
+// If srv.Addr is blank, ":http" is used.
+// ListenAndServe always returns a non-nil error.
+func (srv *Server) ListenAndServe() error {
+	addr := srv.Addr
+	if addr == "" {
+		addr = ":http"
+	}
+	// 监听接口
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	// 处理接收客户端的请求信息
+	return srv.Serve(tcpKeepAliveListener{ln.(*net.TCPListener)})
+}
+```
+继续看一下`Serve`方法:   
+```go
+// Serve accepts incoming connections on the Listener l, creating a
+// new service goroutine for each. The service goroutines read requests and
+// then call srv.Handler to reply to them.
+//
+// For HTTP/2 support, srv.TLSConfig should be initialized to the
+// provided listener's TLS Config before calling Serve. If
+// srv.TLSConfig is non-nil and doesn't include the string "h2" in
+// Config.NextProtos, HTTP/2 support is not enabled.
+//
+// Serve always returns a non-nil error. After Shutdown or Close, the
+// returned error is ErrServerClosed.
+func (srv *Server) Serve(l net.Listener) error {
+	// 最后释放资源
+	defer l.Close()
+	if fn := testHookServerServe; fn != nil {
+		fn(srv, l)
+	}
+	var tempDelay time.Duration // how long to sleep on accept failure
+
+	if err := srv.setupHTTP2_Serve(); err != nil {
+		return err
+	}
+
+	srv.trackListener(l, true)
+	defer srv.trackListener(l, false)
+
+	baseCtx := context.Background() // base is always background, per Issue 16220
+	ctx := context.WithValue(baseCtx, ServerContextKey, srv)
+	for {
+		// 通过Listener接收请求
+		rw, e := l.Accept()
+		if e != nil {
+			select {
+			case <-srv.getDoneChan():
+				return ErrServerClosed
+			default:
+			}
+			if ne, ok := e.(net.Error); ok && ne.Temporary() {
+				if tempDelay == 0 {
+					tempDelay = 5 * time.Millisecond
+				} else {
+					tempDelay *= 2
+				}
+				if max := 1 * time.Second; tempDelay > max {
+					tempDelay = max
+				}
+				srv.logf("http: Accept error: %v; retrying in %v", e, tempDelay)
+				time.Sleep(tempDelay)
+				continue
+			}
+			return e
+		}
+		tempDelay = 0
+		// 创建一个新的Connection
+		c := srv.newConn(rw)
+		c.setState(c.rwc, StateNew) // before Serve can return
+		// 单独开了一个goroutine，把这个请求的数据当做参数扔给这个conn去服务，这就实现了高并发，用户的每一次请求都是在一个新的goroutine去服务，相互不影响。
+		go c.serve(ctx)
+	}
+}
+```
+
+里面会对每次请求都通过一个单独的`goroutine`去执行`c.serve()`方法，`server()`方法内容太多，有点看不明白，这里只贴核心部分:    
+
+```go
+// Serve a new connection.
+func (c *conn) serve(ctx context.Context) {
+	c.remoteAddr = c.rwc.RemoteAddr().String()
+	ctx = context.WithValue(ctx, LocalAddrContextKey, c.rwc.LocalAddr())
+	// 此处省略n行
+	..........
+	// HTTP/1.x from here on.
+
+	ctx, cancelCtx := context.WithCancel(ctx)
+	c.cancelCtx = cancelCtx
+	defer cancelCtx()
+
+	c.r = &connReader{conn: c}
+	c.bufr = newBufioReader(c.r)
+	c.bufw = newBufioWriterSize(checkConnErrorWriter{c}, 4<<10)
+
+	for {
+		// 解析request请求
+		w, err := c.readRequest(ctx)
+		if c.r.remain != c.server.initialReadLimitSize() {
+			// If we read any bytes off the wire, we're active.
+			c.setState(c.rwc, StateActive)
+		}
+		if err != nil {
+			const errorHeaders = "\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n\r\n"
+
+			if err == errTooLarge {
+				// Their HTTP client may or may not be
+				// able to read this if we're
+				// responding to them and hanging up
+				// while they're still writing their
+				// request. Undefined behavior.
+				const publicErr = "431 Request Header Fields Too Large"
+				fmt.Fprintf(c.rwc, "HTTP/1.1 "+publicErr+errorHeaders+publicErr)
+				c.closeWriteAndWait()
+				return
+			}
+			if isCommonNetReadError(err) {
+				return // don't reply
+			}
+
+			publicErr := "400 Bad Request"
+			if v, ok := err.(badRequestError); ok {
+				publicErr = publicErr + ": " + string(v)
+			}
+
+			fmt.Fprintf(c.rwc, "HTTP/1.1 "+publicErr+errorHeaders+publicErr)
+			return
+		}
+
+		// Expect 100 Continue support
+		req := w.req
+		if req.expectsContinue() {
+			if req.ProtoAtLeast(1, 1) && req.ContentLength != 0 {
+				// Wrap the Body reader with one that replies on the connection
+				req.Body = &expectContinueReader{readCloser: req.Body, resp: w}
+			}
+		} else if req.Header.get("Expect") != "" {
+			w.sendExpectationFailed()
+			return
+		}
+
+		c.curReq.Store(w)
+
+		if requestBodyRemains(req.Body) {
+			registerOnHitEOF(req.Body, w.conn.r.startBackgroundRead)
+		} else {
+			if w.conn.bufr.Buffered() > 0 {
+				w.conn.r.closeNotifyFromPipelinedRequest()
+			}
+			w.conn.r.startBackgroundRead()
+		}
+
+		// 下面这部分注释说的很明白了
+		// HTTP cannot have multiple simultaneous active requests.[*]
+		// Until the server replies to this request, it can't read another,
+		// so we might as well run the handler in this goroutine.
+		// [*] Not strictly true: HTTP pipelining. We could let them all process
+		// in parallel even if their responses need to be serialized.
+		// But we're not going to implement HTTP pipelining because it
+		// was never deployed in the wild and the answer is HTTP/2.
+		serverHandler{c.server}.ServeHTTP(w, w.req)
+		w.cancelCtx()
+		if c.hijacked() {
+			return
+		}
+		w.finishRequest()
+		if !w.shouldReuseConnection() {
+			if w.requestBodyLimitHit || w.closedRequestBodyEarly() {
+				c.closeWriteAndWait()
+			}
+			return
+		}
+		c.setState(c.rwc, StateIdle)
+		c.curReq.Store((*response)(nil))
+
+		if !w.conn.server.doKeepAlives() {
+			// We're in shutdown mode. We might've replied
+			// to the user without "Connection: close" and
+			// they might think they can send another
+			// request, but such is life with HTTP/1.1.
+			return
+		}
+
+		if d := c.server.idleTimeout(); d != 0 {
+			c.rwc.SetReadDeadline(time.Now().Add(d))
+			if _, err := c.bufr.Peek(4); err != nil {
+				return
+			}
+		}
+		c.rwc.SetReadDeadline(time.Time{})
+	}
+}
+
+```
+
+这代代码有点多，其实主要的就是两点:   
+```go
+// 解析request请求
+w, err := c.readRequest(ctx)
+// 执行server handler的ServeHttp方法
+serverHandler{c.server}.ServeHTTP(w, w.req)
+```
+这个`serverHandler`是啥? 
+```go
+// serverHandler delegates to either the server's Handler or
+// DefaultServeMux and also handles "OPTIONS *" requests.
+type serverHandler struct {
+	srv *Server
+}
+```
+
+就是说可以是`server`设置的`handler`或者是`DefaultServeMux`，而`server`的`handler`是在哪里设置的呢？也就是我们刚才在调用函数`ListenAndServe`时候的第二个参数，我们前面例子传递的是`nil`。
+那继续往下看`ServeHTTP`方法:    
+```go
+func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
+	handler := sh.srv.Handler
+	if handler == nil {
+		handler = DefaultServeMux
+	}
+	if req.RequestURI == "*" && req.Method == "OPTIONS" {
+		handler = globalOptionsHandler{}
+	}
+	handler.ServeHTTP(rw, req)
+}
+```
+
+因为我们哪里`server.handler`是`nil`所以这里就会用默认的`DefaultServeMux`。
+我们继续看一下`ServeHTTP`函数,它是`Handler`接口的函数:   
+```go
+// A Handler responds to an HTTP request.
+//
+// ServeHTTP should write reply headers and data to the ResponseWriter
+// and then return. Returning signals that the request is finished; it
+// is not valid to use the ResponseWriter or read from the
+// Request.Body after or concurrently with the completion of the
+// ServeHTTP call.
+//
+// Depending on the HTTP client software, HTTP protocol version, and
+// any intermediaries between the client and the Go server, it may not
+// be possible to read from the Request.Body after writing to the
+// ResponseWriter. Cautious handlers should read the Request.Body
+// first, and then reply.
+//
+// Except for reading the body, handlers should not modify the
+// provided Request.
+//
+// If ServeHTTP panics, the server (the caller of ServeHTTP) assumes
+// that the effect of the panic was isolated to the active request.
+// It recovers the panic, logs a stack trace to the server error log,
+// and either closes the network connection or sends an HTTP/2
+// RST_STREAM, depending on the HTTP protocol. To abort a handler so
+// the client sees an interrupted response but the server doesn't log
+// an error, panic with the value ErrAbortHandler.
+type Handler interface {
+	ServeHTTP(ResponseWriter, *Request)
+}
+```
+这里的实现类是`ServeMux`，我们看一下`ServeMux`实现的`ServeHTTP`的源码:   
+```go
+// ServeHTTP dispatches the request to the handler whose
+// pattern most closely matches the request URL.
+func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
+	if r.RequestURI == "*" {
+		if r.ProtoAtLeast(1, 1) {
+			w.Header().Set("Connection", "close")
+		}
+		w.WriteHeader(StatusBadRequest)
+		return
+	}
+	h, _ := mux.Handler(r)
+	h.ServeHTTP(w, r)
+}
+```
+上面会根据`request`选择`handler`，并且进入到这个`handler`的`ServeHTTP`。
+```go
+// handler is the main implementation of Handler.
+// The path is known to be in canonical form, except for CONNECT methods.
+func (mux *ServeMux) handler(host, path string) (h Handler, pattern string) {
+	mux.mu.RLock()
+	defer mux.mu.RUnlock()
+
+	// Host-specific pattern takes precedence over generic ones
+	if mux.hosts {
+		h, pattern = mux.match(host + path)
+	}
+	if h == nil {
+		h, pattern = mux.match(path)
+	}
+	if h == nil {
+		h, pattern = NotFoundHandler(), ""
+	}
+	return
+}
+
+```
+原来他是根据用户请求的`URL`和路由器里面存储的`map`去匹配的，当匹配到之后返回存储的`handler`，调用这个`handler`的`ServeHTTP`接口就可以执行到相应的函数了。
+那这里我们再哪里设置了`handler`呢？  
+
+```go
+func main() {
+	http.HandleFunc("/", sayHello)
+	err := http.ListenAndServe(":9999", nil)
+	if err != nil {
+		log.Fatalf("ListenAndServe: ", err)
+	}
+}
+func sayHello(writer http.ResponseWriter, request *http.Request) {
+	fmt.Fprintf(writer, "Hello World")
+}
+```
+这就要从`http.HandleFunc()`说起:   
+
+```go
+// HandleFunc registers the handler function for the given pattern
+// in the DefaultServeMux.
+// The documentation for ServeMux explains how patterns are matched.
+func HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
+	DefaultServeMux.HandleFunc(pattern, handler)
+}
+```
+然后:  
+```go
+// HandleFunc registers the handler function for the given pattern.
+func (mux *ServeMux) HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
+	// 路由器去分发
+	mux.Handle(pattern, HandlerFunc(handler))
+}
+```
+
+而`mux.Handle`的实现:   
+```go
+// Handle registers the handler for the given pattern.
+// If a handler already exists for pattern, Handle panics.
+func (mux *ServeMux) Handle(pattern string, handler Handler) {
+	mux.mu.Lock()
+	defer mux.mu.Unlock()
+
+	if pattern == "" {
+		panic("http: invalid pattern")
+	}
+	if handler == nil {
+		panic("http: nil handler")
+	}
+	if _, exist := mux.m[pattern]; exist {
+		panic("http: multiple registrations for " + pattern)
+	}
+
+	if mux.m == nil {
+		mux.m = make(map[string]muxEntry)
+	}
+	mux.m[pattern] = muxEntry{h: handler, pattern: pattern}
+
+	if pattern[0] != '/' {
+		mux.hosts = true
+	}
+}
+```
+路由器是怎么分发的呢？它是根据用户请求的`URL`和路由器里面存储的`map`去匹配的，当匹配到之后返回存储的`handler`，调用这个`handler`的`ServeHTTP`接口就可以执行到相应的函数了。
+
+那上面的例子中，我们的`HandlerFunc`是什么呢？她的`ServeHTTP`呢？
+```go
+// The HandlerFunc type is an adapter to allow the use of
+// ordinary functions as HTTP handlers. If f is a function
+// with the appropriate signature, HandlerFunc(f) is a
+// Handler that calls f.
+type HandlerFunc func(ResponseWriter, *Request)
+
+// ServeHTTP calls f(w, r).
+func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
+	f(w, r)
+}
+```
+看到了吗？`HandlerFunc`实现了`ServeHTTP`接口。
+我们调用的代码里面第一句不是调用了`http.HandleFunc("/", sayHello)`嘛。这个作用就是注册了请求/的路由规则，当请求`uri`为"/"，路由就会转到函数`sayHello`，`DefaultServeMux`会调用`ServeHTTP`方法，这个方法内部其实就是调用`sayHello`本身，最后通过写入`response`的信息反馈到客户端。
+
+最后总结一下`Go`代码的执行流程:   
+
+- 首先调用`Http.HandleFunc()`      
+    - 调用了`DefaultServeMux`的`HandleFunc()`
+    - 调用了`DefaultServeMux`的`Handle()`
+    - 往`DefaultServeMux`的`map[string]muxEntry`中增加对应的`handler`和路由规则
+
+- 其次调用`http.ListenAndServe(":9999", nil)`   
+    - 实例化`Server`
+    - 调用`Server`的`ListenAndServe()`
+    - 调用`net.Listen("tcp", addr)`监听端口
+    - 启动一个`for`循环，在循环体中`Accept`请求
+    - 对每个请求实例化一个`Conn`，并且开启一个`goroutine`为这个请求进行服务`go c.serve()`
+    - 读取每个请求的内容`w, err := c.readRequest()`
+    - 判断`handler`是否为空，如果没有设置`handler`就设置为`DefaultServeMux`
+    - 调用`handler`的`ServeHttp`
+    - 在这个例子中，下面就进入到`DefaultServeMux.ServeHttp()`
+    - 根据`request`选择`handler`，并且进入到这个`handler`的`ServeHTTP`,也就是`mux.handler(r).ServeHTTP(w, r)`- 选择`handler`:   
+
+		- 判断是否有路由能满足这个`request`（循环遍历`ServeMux`的`muxEntry`）
+        - 如果有路由满足，调用这个路由`handler`的`ServeHTTP`
+        如果没有路由满足，调用`NotFoundHandler`的`ServeHTTP`
+
+![Image](https://raw.githubusercontent.com/CharonChui/Pictures/master/go_web_http_list.png?raw=true)
+
+
+---
+
+- 邮箱 ：charon.chui@gmail.com  
+- Good Luck! 
